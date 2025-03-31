@@ -3,6 +3,7 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
+
 contract Voting is ReentrancyGuard {
     address public superAdmin; // Primary administrator
     uint256 public candidateCount;
@@ -10,6 +11,8 @@ contract Voting is ReentrancyGuard {
     uint256 public votingStart;
     uint256 public votingEnd;
     bool public isPaused;
+    
+    string public didRegistryCID; // IPFS CID for off-chain voter DID registry
 
     struct Candidate {
         uint256 candidateId;
@@ -31,6 +34,7 @@ contract Voting is ReentrancyGuard {
         address voterAddress;
         string name;
         string phone;
+        string did; // DID of the voter
         bool isVerified;
         bool isRegistered;
     }
@@ -53,6 +57,7 @@ contract Voting is ReentrancyGuard {
     event AdminRemoved(address adminAddress);
     event ElectionDetailsUpdated(string field, string newValue);
     event ContractPaused(bool isPaused);
+    event DIDRegistryUpdated(string cid);
 
     modifier isSuperAdmin() {
         require(msg.sender == superAdmin, "Only super admin allowed");
@@ -79,9 +84,22 @@ contract Voting is ReentrancyGuard {
         _;
     }
 
-    constructor() {
+    // Constructor - Takes IPFS CID for DID Registry
+    constructor(string memory _didRegistryCID) {
         superAdmin = msg.sender;
         admins[msg.sender] = true;
+        didRegistryCID = _didRegistryCID;
+        emit DIDRegistryUpdated(_didRegistryCID);
+    }
+
+    // Update DID Registry CID (if needed)
+    function updateDIDRegistry(string memory _newCID) external isSuperAdmin {
+        didRegistryCID = _newCID;
+        emit DIDRegistryUpdated(_newCID);
+    }
+
+    function getDIDRegistryCID() public view returns (string memory) {
+        return didRegistryCID;
     }
 
     // Admin Management
@@ -144,15 +162,21 @@ contract Voting is ReentrancyGuard {
     }
 
     // Voter Management
-    function registerVoter(string memory name, string memory phone) external notPaused {
+    function registerVoter(string memory name, string memory phone, string memory did) external notPaused {
         require(!Voters[msg.sender].isRegistered, "Already registered");
-        Voters[msg.sender] = Voter(msg.sender, name, phone, false, true);
+        Voters[msg.sender] = Voter(msg.sender, name, phone, did, false, false, true);
         voterCount++;
         emit VoterRegistered(msg.sender, name);
     }
 
-    function verifyVoter(address voterAddress) external isAdmin notPaused {
+    function verifyVoter(address voterAddress, string memory did) external isAdmin notPaused {
         require(Voters[voterAddress].isRegistered, "Voter not registered");
+
+        // Fetch voter DID from IPFS (Off-chain validation happens here)
+        // This is done in the frontend using `didRegistryCID`
+
+        require(keccak256(abi.encodePacked(Voters[voterAddress].did)) == keccak256(abi.encodePacked(did)), "DID mismatch");
+
         Voters[voterAddress].isVerified = true;
         emit VoterVerified(voterAddress, true);
     }
