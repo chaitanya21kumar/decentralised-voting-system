@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-contract Voting {
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+
+contract Voting is ReentrancyGuard {
     address public superAdmin; // Primary administrator
     uint256 public candidateCount;
     uint256 public voterCount;
@@ -9,6 +11,7 @@ contract Voting {
     uint256 public votingEnd;
     bool public isPaused;
 
+    mapping(bytes32 => bool) private candidateNameExists;
     struct Candidate {
         uint256 candidateId;
         string name;
@@ -127,13 +130,15 @@ contract Voting {
         emit ElectionEnded(block.timestamp);
     }
 
-    // Candidate Management
+    // Candidate Management 
     function addCandidate(string memory name, string memory slogan) external isAdmin notPaused {
         require(bytes(name).length > 0, "Candidate name required");
-        for (uint256 i = 0; i < candidateCount; i++) {
-            require(keccak256(abi.encodePacked(Candidates[i].name)) != keccak256(abi.encodePacked(name)), "Duplicate candidate name");
-        }
+        bytes32 nameHash = keccak256(abi.encodePacked(name));
+        // Check using mapping for duplicate candidate names
+        require(!candidateNameExists[nameHash], "Duplicate candidate name");
+        
         Candidates[candidateCount] = Candidate(candidateCount, name, slogan, 0);
+        candidateNameExists[nameHash] = true; // Mark candidate name as added
         emit CandidateAdded(candidateCount, name, slogan);
         candidateCount++;
     }
@@ -152,8 +157,8 @@ contract Voting {
         emit VoterVerified(voterAddress, true);
     }
 
-    // Voting
-    function vote(uint256 candidateId) external onlyWhenVotingActive notPaused {
+    // Voting with Reentrancy Guard for security improvement
+    function vote(uint256 candidateId) external onlyWhenVotingActive notPaused nonReentrant {
         require(Voters[msg.sender].isVerified, "Not verified");
         require(!Voters[msg.sender].hasVoted, "Already voted");
         require(candidateId < candidateCount, "Invalid candidate");
