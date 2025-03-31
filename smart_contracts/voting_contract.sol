@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
@@ -11,7 +11,6 @@ contract Voting is ReentrancyGuard {
     uint256 public votingEnd;
     bool public isPaused;
 
-    mapping(bytes32 => bool) private candidateNameExists;
     struct Candidate {
         uint256 candidateId;
         string name;
@@ -33,7 +32,6 @@ contract Voting is ReentrancyGuard {
         string name;
         string phone;
         bool isVerified;
-        bool hasVoted;
         bool isRegistered;
     }
 
@@ -41,6 +39,8 @@ contract Voting is ReentrancyGuard {
     mapping(address => Voter) private Voters;
     mapping(uint256 => Candidate) public Candidates;
     mapping(address => bool) public admins;
+    mapping(bytes32 => bool) private candidateNameExists;
+    mapping(address => bool) private hasVoted;
 
     event CandidateAdded(uint256 candidateId, string name, string slogan);
     event VoterRegistered(address voterAddress, string name);
@@ -146,7 +146,7 @@ contract Voting is ReentrancyGuard {
     // Voter Management
     function registerVoter(string memory name, string memory phone) external notPaused {
         require(!Voters[msg.sender].isRegistered, "Already registered");
-        Voters[msg.sender] = Voter(msg.sender, name, phone, false, false, true);
+        Voters[msg.sender] = Voter(msg.sender, name, phone, false, true);
         voterCount++;
         emit VoterRegistered(msg.sender, name);
     }
@@ -160,11 +160,11 @@ contract Voting is ReentrancyGuard {
     // Voting with Reentrancy Guard for security improvement
     function vote(uint256 candidateId) external onlyWhenVotingActive notPaused nonReentrant {
         require(Voters[msg.sender].isVerified, "Not verified");
-        require(!Voters[msg.sender].hasVoted, "Already voted");
+        require(!hasVoted[msg.sender], "Already voted");
         require(candidateId < candidateCount, "Invalid candidate");
         require(Candidates[candidateId].votes < Election.maxVotesPerCandidate, "Vote limit reached");
         Candidates[candidateId].votes++;
-        Voters[msg.sender].hasVoted = true;
+        hasVoted[msg.sender] = true;
         emit VoteCast(msg.sender, candidateId);
     }
 
@@ -174,7 +174,7 @@ contract Voting is ReentrancyGuard {
         emit ContractPaused(pause);
     }
 
-    function declareWinner() external view onlyWhenVotingEnded returns (uint256 winnerId, string memory winnerName, uint256 maxVotes) {
+    function declareWinner() external view isAdmin onlyWhenVotingEnded returns (uint256 winnerId, string memory winnerName, uint256 maxVotes) {
         uint256 maxVoteCount = 0;
         uint256 winnerIdx = 0;
         for (uint256 i = 0; i < candidateCount; i++) {
