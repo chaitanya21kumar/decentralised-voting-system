@@ -1,7 +1,7 @@
 "use client";
 import React, { useState } from "react";
 import axios from "axios";
-import { useRouter } from "next/navigation";
+import router from "next/router";
 
 export default function UploadLists() {
   const [voterFile, setVoterFile] = useState<File | null>(null);
@@ -16,6 +16,8 @@ export default function UploadLists() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setMessage(null);
+
     if (!voterFile || !candidateFile) {
       setMessage("Please select both JSON files to upload.");
       return;
@@ -26,32 +28,36 @@ export default function UploadLists() {
     formData.append("candidateFile", candidateFile);
 
     try {
-      const response = await axios.post("/api/admin/lists/upload", formData, {
+      // 1. Upload to IPFS
+      const uploadRes = await axios.post("/api/admin/lists/upload", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
-      if (response.data.success) {
-        setMessage(`Upload Successful! Voter IPFS: ${response.data.data.voterFile.ipfsHash}, Candidate IPFS: ${response.data.data.candidateFile.ipfsHash}`);
-      } else {
-        setMessage("Upload failed.");
-      }
+      const voterIpfsHash = uploadRes.data.data.voterFile.ipfsHash;
+      const candidateIpfsHash = uploadRes.data.data.candidateFile.ipfsHash;
+
+      // 2. Process Voters
+      await axios.post("/api/admin/processVoters", { ipfsHash: voterIpfsHash });
+
+      // 3. Process Candidates
+      // await axios.post("/api/admin/processCandidates", { ipfsHash: candidateIpfsHash });
+
+      setMessage("Upload and processing completed successfully!");
     } catch (error) {
-      setMessage("Error uploading files.");
+      console.error("Upload error:", error);
+      setMessage("Error during upload or processing.");
     }
   };
- 
-  const router = useRouter();
 
   const handleLogout = async () => {
     try {
       await axios.post("/api/admin/logout");
-      console.log("Logout successful");
       router.push("/admin");
     } catch (error) {
-      console.log("Error logging out:", error); 
       setMessage("Error logging out.");
     }
   };
+
   return (
     <section>
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
@@ -73,18 +79,19 @@ export default function UploadLists() {
 
             {message && <div className="mt-2 text-center text-sm text-green-600">{message}</div>}
 
-            <button type="submit" className="btn w-full bg-indigo-600 text-white hover:bg-indigo-700">Upload Files</button>
+            <button type="submit" className="btn w-full bg-indigo-600 text-white hover:bg-indigo-700">
+              Upload & Process Files
+            </button>
             <button
-                type="button"
-                onClick={handleLogout}
-                className="btn w-full bg-indigo-500 text-white hover:bg-indigo-700"
-              >
-                Logout
-              </button>
+              type="button"
+              onClick={handleLogout}
+              className="btn w-full bg-indigo-500 text-white hover:bg-indigo-700"
+            >
+              Logout
+            </button>
           </form>
         </div>
       </div>
     </section>
   );
 }
-
