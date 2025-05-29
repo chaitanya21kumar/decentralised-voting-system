@@ -1,12 +1,16 @@
 "use client";
 import React, { useState } from "react";
 import axios from "axios";
-import router from "next/router";
+import { useRouter } from "next/navigation";
+import AdminHeader from "@/components/ui/AdminHeader";
+import { showToast } from "../../pages/api/admin/showToast";
 
 export default function UploadLists() {
+  const router = useRouter();
   const [voterFile, setVoterFile] = useState<File | null>(null);
   const [candidateFile, setCandidateFile] = useState<File | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false); // loader state
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: "voter" | "candidate") => {
     const selectedFile = e.target.files ? e.target.files[0] : null;
@@ -19,47 +23,47 @@ export default function UploadLists() {
     setMessage(null);
 
     if (!voterFile || !candidateFile) {
-      setMessage("Please select both JSON files to upload.");
+      showToast("Please select both JSON files to upload.", "error");
       return;
     }
+
+    setLoading(true);
 
     const formData = new FormData();
     formData.append("voterFile", voterFile);
     formData.append("candidateFile", candidateFile);
 
     try {
-      // 1. Upload to IPFS
       const uploadRes = await axios.post("/api/admin/lists/upload", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
+      showToast("Files uploaded successfully!", "success");
+
       const voterIpfsHash = uploadRes.data.data.voterFile.ipfsHash;
       const candidateIpfsHash = uploadRes.data.data.candidateFile.ipfsHash;
 
-      // 2. Process Voters
       await axios.post("/api/admin/processVoters", { ipfsHash: voterIpfsHash });
+      await axios.post("/api/admin/processCandidates", { ipfsHash: candidateIpfsHash });
 
-      // 3. Process Candidates
-      // await axios.post("/api/admin/processCandidates", { ipfsHash: candidateIpfsHash });
-
-      setMessage("Upload and processing completed successfully!");
-    } catch (error) {
+      showToast("Voter and Candidate files processed successfully!", "success");
+      
+    } catch (error: any) {
+      if (error.response?.status === 401) {
+        router.push("/admin");
+        showToast("Session expired. Please log in again.", "error");
+        return;
+      }
       console.error("Upload error:", error);
-      setMessage("Error during upload or processing.");
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      await axios.post("/api/admin/logout");
-      router.push("/admin");
-    } catch (error) {
-      setMessage("Error logging out.");
+      showToast("Error during upload or processing.", "error");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <section>
+      <AdminHeader />
       <div className="mx-auto max-w-6xl px-4 sm:px-6">
         <div className="py-12 md:py-20">
           <div className="pb-12 text-center">
@@ -77,17 +81,23 @@ export default function UploadLists() {
               <input type="file" accept=".json" className="form-input w-full" onChange={(e) => handleFileChange(e, "candidate")} required />
             </div>
 
-            {message && <div className="mt-2 text-center text-sm text-green-600">{message}</div>}
+            {loading && (
+              <div className="flex items-center space-x-2 justify-center text-indigo-400">
+                <div className="w-6 h-6 border-4 border-indigo-500 border-dashed rounded-full animate-spin" />
+                <p className="text-sm font-medium">Processing files, please wait...</p>
+              </div>
+            )}
 
-            <button type="submit" className="btn w-full bg-indigo-600 text-white hover:bg-indigo-700">
-              Upload & Process Files
-            </button>
+            {message && !loading && (
+              <div className="mt-2 text-center text-sm text-green-600">{message}</div>
+            )}
+
             <button
-              type="button"
-              onClick={handleLogout}
-              className="btn w-full bg-indigo-500 text-white hover:bg-indigo-700"
+              type="submit"
+              className="btn w-full bg-indigo-600 text-white hover:bg-indigo-700"
+              disabled={loading}
             >
-              Logout
+              {loading ? "Uploading..." : "Upload & Process Files"}
             </button>
           </form>
         </div>

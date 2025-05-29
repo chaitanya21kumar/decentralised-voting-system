@@ -3,8 +3,7 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
-
-contract Voting is ReentrancyGuard {
+ contract Voting is ReentrancyGuard {
     address public superAdmin; // Primary administrator
     uint256 public candidateCount;
     uint256 public voterCount;
@@ -121,7 +120,7 @@ contract Voting is ReentrancyGuard {
         string memory adminEmail,
         string memory adminTitle,
         string memory electionTitle,
-        string memory organizationTitle,
+        string memory organizationTitle,  
         uint256 maxVotes
     ) external isAdmin {
         Election = ElectionDetails({
@@ -164,7 +163,7 @@ contract Voting is ReentrancyGuard {
     // Voter Management
     function registerVoter(string memory name, string memory phone, string memory did) external notPaused {
         require(!Voters[msg.sender].isRegistered, "Already registered");
-        Voters[msg.sender] = Voter(msg.sender, name, phone, did, false, false, true);
+        Voters[msg.sender] = Voter(msg.sender, name, phone, did, false, true);
         voterCount++;
         emit VoterRegistered(msg.sender, name);
     }
@@ -208,5 +207,8 @@ contract Voting is ReentrancyGuard {
             }
         }
         return (winnerIdx, Candidates[winnerIdx].name, maxVoteCount);
+    }
+    function getCandidateCount() public view returns (uint256) {
+        return candidateCount;
     }
 }

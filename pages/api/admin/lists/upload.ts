@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import formidable, { File as FormidableFile, IncomingForm } from "formidable";
+// import { verifyAdminAuth } from "../../../../lib/verifyAdminAuth";
 import fs from "fs";
 import pinataSDK from "@pinata/sdk";
 const pinata = new pinataSDK("90b3ccabe543388210da", "7c3eaed89e56b0ebebd4a793d42a6dfd89626a7469aec2087e863bf2f4103380");
@@ -26,6 +27,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
 
     try {
+    
       const fileKeys = Object.keys(files);
       const fileResponses: Record<string, any> = {};
 
@@ -52,7 +54,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       res.status(200).json({ success: true, data: fileResponses });
     } catch (error) {
       console.error("Pinata Upload Error:", error);
-      res.status(500).json({ success: false, message: "Error uploading to Pinata" });
+       if (!res.headersSent)
+      res.status(500).json({ success: false, message: "Server error" });
+  
     }
   });
 }

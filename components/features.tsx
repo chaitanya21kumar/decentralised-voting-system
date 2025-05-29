@@ -2,7 +2,6 @@ import Image from "next/image";
 import BlurredShapeGray from "@/public/images/blurred-shape-gray.svg";
 import BlurredShape from "@/public/images/blurred-shape.svg";
 import FeaturesImage from "@/public/images/features.png";
-
 export default function Features() {
   return (
     <section className="relative">
@@ -36,26 +35,26 @@ export default function Features() {
           <div className="mx-auto max-w-3xl pb-4 text-center md:pb-12">
             <div className="inline-flex items-center gap-3 pb-3 before:h-px before:w-8 before:bg-gradient-to-r before:from-transparent before:to-indigo-200/50 after:h-px after:w-8 after:bg-gradient-to-l after:from-transparent after:to-indigo-200/50">
               <span className="inline-flex bg-gradient-to-r from-indigo-500 to-indigo-200 bg-clip-text text-transparent">
-                Advanced Controls
+               About us!
               </span>
             </div>
             <h2 className="animate-[gradient_6s_linear_infinite] bg-[linear-gradient(to_right,theme(colors.gray.200),theme(colors.indigo.200),theme(colors.gray.50),theme(colors.indigo.300),theme(colors.gray.200))] bg-[length:200%_auto] bg-clip-text pb-4 font-nacelle text-3xl font-semibold text-transparent md:text-4xl">
-              Built for modern product teams
+              Built for secure vote 
             </h2>
             <p className="text-lg text-indigo-200/65">
-              Open AI reads and understands your files, and with nothing more
-              than a single line of feedback, so you can go further than the
-              speed of thought.
+              It's a Blockchain based voting system that is secure and transparent
+               you can 
+              vote here anonymously and your vote will be stored in the blockchain.
             </p>
           </div>
           <div className="flex justify-center pb-4 md:pb-12" data-aos="fade-up">
-            <Image
+            {/* <Image
               className="max-w-none"
               src={FeaturesImage}
               width={1104}
               height={384}
               alt="Features"
-            />
+            /> */}
           </div>
           {/* Items */}
           <div className="mx-auto grid max-w-sm gap-12 sm:max-w-none sm:grid-cols-2 md:gap-x-14 md:gap-y-16 lg:grid-cols-3">
@@ -91,11 +90,10 @@ export default function Features() {
                 <path d="M19 6H0v2h17v8H7v-6H5v8h19v-2h-5V6Z" />
               </svg>
               <h3 className="mb-1 font-nacelle text-[1rem] font-semibold text-gray-200">
-                Team Views
+                Our Team
               </h3>
               <p className="text-indigo-200/65">
-                Track progress across custom flows for your team. Find the right
-                balance for the user, privacy and security.
+               List of our team members and their roles in the project.
               </p>
             </article>
             <article>
@@ -112,14 +110,13 @@ export default function Features() {
                 />
               </svg>
               <h3 className="mb-1 font-nacelle text-[1rem] font-semibold text-gray-200">
-                Advanced Search
+               Reviews
               </h3>
               <p className="text-indigo-200/65">
-                Track progress across custom flows for your team. Find the right
-                balance for the user, privacy and security.
+                You can see the reviews of the project and the feedbacks of the users.
               </p>
             </article>
-            <article>
+            {/* <article>
               <svg
                 className="mb-3 fill-indigo-500"
                 xmlns="http://www.w3.org/2000/svg"
@@ -186,7 +183,7 @@ export default function Features() {
                 Track progress across custom flows for your team. Find the right
                 balance for the user, privacy and security.
               </p>
-            </article>
+            </article> */}
           </div>
         </div>
       </div>

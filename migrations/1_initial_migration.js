@@ -1,5 +1,6 @@
-const Migrations = artifacts.require("Migrations");
+const Voting = artifacts.require("Voting");
 
 module.exports = function (deployer) {
-  deployer.deploy(Migrations);
+  const didRegistryCID = "QmXhdNqXYJsWb1L8gQZNTDz6sCoUPnR2NZqeiUbw1hHp8q";
+  deployer.deploy(Voting, didRegistryCID);
 };

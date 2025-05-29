@@ -11,7 +11,6 @@ export default function Cta() {
         <Image
           className="max-w-none"
           src={BlurredShape}
-          
           width={760}
           height={668}
           alt="Blurred shape"
@@ -24,9 +23,9 @@ export default function Cta() {
               className="animate-[gradient_6s_linear_infinite] bg-[linear-gradient(to_right,theme(colors.gray.200),theme(colors.indigo.200),theme(colors.gray.50),theme(colors.indigo.300),theme(colors.gray.200))] bg-[length:200%_auto] bg-clip-text pb-8 font-nacelle text-3xl font-semibold text-transparent md:text-4xl"
               data-aos="fade-up"
             >
-              Join the content-first platform
+              Join Our Secure and Transparent platform
             </h2>
-            <div className="mx-auto max-w-xs sm:flex sm:max-w-none sm:justify-center">
+            {/* <div className="mx-auto max-w-xs sm:flex sm:max-w-none sm:justify-center">
               <div data-aos="fade-up" data-aos-delay={400}>
                 <a
                   className="btn group mb-4 w-full bg-gradient-to-t from-indigo-600 to-indigo-500 bg-[length:100%_100%] bg-[bottom] text-white shadow-[inset_0px_1px_0px_0px_theme(colors.white/.16)] hover:bg-[length:100%_150%] sm:mb-0 sm:w-auto"
@@ -46,10 +45,9 @@ export default function Cta() {
                   href="#0"
                 >
                   Schedule Demo
-                  
                 </a>
               </div>
-            </div>
+            </div> */}
           </div>
         </div>
       </div>

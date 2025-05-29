@@ -3,28 +3,17 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import axios from "axios";
 import mongoose from "mongoose";
+import Voter from "../../../models/Voter";
+import connectToDatabase from "../../../lib/mongodb";
 import bcrypt from "bcryptjs";
 import nodemailer from "nodemailer";
+import fs from "fs";
+import path from "path";
+const Web3 = require("web3");
+const contract = require("@truffle/contract");
 
-// 1. MongoDB setup
-const MONGODB_URI = "mongodb://localhost:27017/decentralised-voting-system";
 
-const connectToDatabase = async () => {
-  if (mongoose.connection.readyState === 0) {
-    await mongoose.connect(MONGODB_URI);
-  }
-};
 
-// 2. Mongoose Voter model
-const VoterSchema = new mongoose.Schema({
-  rollNumber: { type: String, required: true, unique: true },
-  name: String,
-  email: String,
-  passwordHash: String,
-  ipfsHash: String,
-});
-
-const Voter = mongoose.models.Voter || mongoose.model("Voter", VoterSchema);
 
 // 3. Random password generator
 const generatePassword = (length = 8) => {
@@ -52,24 +41,48 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!ipfsHash) {
     return res.status(400).json({ success: false, message: "Missing IPFS hash" });
   }
+   const provider = new Web3.providers.HttpProvider("http://127.0.0.1:8545");
+    const web3 = new Web3(provider);
+
+    const artifactPath = path.join(process.cwd(), "build/contracts/Voting.json");
+    const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
+    const Voting = contract(artifact);
+    Voting.setProvider(provider);
+
+    // Compatibility patch
+    if (typeof Voting.currentProvider.sendAsync !== "function") {
+      Voting.currentProvider.sendAsync = function () {
+        return Voting.currentProvider.send.apply(Voting.currentProvider, arguments);
+      };
+    }
+
+    const accounts = await web3.eth.getAccounts();
+    const admin = accounts[0];
+    const voting = await Voting.deployed();
 
   try {
-    await connectToDatabase();
+     await connectToDatabase();
 
     const ipfsUrl = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
     const { data: voters } = await axios.get(ipfsUrl);
 
     const results = [];
-
+    let i=1;
     for (const voter of voters) {
       const password = generatePassword();
       const passwordHash = await bcrypt.hash(password, 10);
+      const Ethaccount = accounts[i];
 
+      await voting.registerVoter(voter.name, voter.phoneNumber, voter.rollNumber, { from: Ethaccount });
+      i++;
       // Save to DB
       const voterDoc = new Voter({
         rollNumber: voter.rollNumber,
         name: voter.name,
         email: voter.email,
+        phoneNumber: voter.phoneNumber,
+        Ethaccount : Ethaccount,
+        mustChangePassword: true,
         passwordHash,
         ipfsHash,
       });
@@ -80,7 +93,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         from: process.env.EMAIL_USER,
         to: voter.email,
         subject: "Your Voting Credentials",
-        html: `<p>Hello ${voter.name},</p><P>Your Username is your Roll number and <p>Your system-generated password is: <strong>${password}</strong></p><p>Keep this confidential.</p>`,
+        html: `<p>Hello ${voter.name},</p><P>Your system-generated password is: <strong>${password}</strong></p><p>Keep this confidential.</p>`,
       });
 
       results.push({ email: voter.email, status: "success" });
