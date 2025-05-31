@@ -7,13 +7,48 @@ import { showToast } from "../../../pages/api/admin/showToast";
 export default function ChangePassword() {
   const router = useRouter();
   const [newPassword, setNewPassword] = useState("");
+  const [error, setError] = useState("");
+  const [strength, setStrength] = useState<"weak" | "medium" | "strong" | "">("");
+
+  const evaluateStrength = (password: string): "weak" | "medium" | "strong" | "" => {
+    if (!password) return "";
+    const strongRegex = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    const mediumRegex = /^((?=.*[A-Z])(?=.*[a-z])(?=.*\d)|(?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&]))[A-Za-z\d@$!%*?&]{6,}$/;
+
+    if (strongRegex.test(password)) return "strong";
+    if (mediumRegex.test(password)) return "medium";
+    return "weak";
+  };
+
+  const getStrengthColor = () => {
+    switch (strength) {
+      case "weak":
+        return "bg-red-500 w-1/3";
+      case "medium":
+        return "bg-yellow-500 w-2/3";
+      case "strong":
+        return "bg-green-500 w-full";
+      default:
+        return "bg-gray-700 w-0";
+    }
+  };
+
+  const validatePassword = (password: string) => {
+    const strongRegex = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    return strongRegex.test(password);
+  };
 
   const handleChange = async (e: React.FormEvent) => {
     e.preventDefault();
     const voterId = localStorage.getItem("voterId");
 
     if (!voterId) {
-      showToast("No Voter ID found. Please log in again.", "error"); 
+      showToast("No Voter ID found. Please log in again.", "error");
+      return;
+    }
+
+    if (!validatePassword(newPassword)) {
+      setError("Password must be at least 8 characters long and include uppercase, lowercase, number, and special character.");
       return;
     }
 
@@ -23,10 +58,10 @@ export default function ChangePassword() {
         newPassword,
       });
       localStorage.removeItem("voterId");
-      showToast("Password updated successfully. Please log in again.", "success"); 
+      showToast("Password updated successfully. Please log in again.", "success");
       router.push("/");
     } catch (error) {
-      showToast("Error updating password. Please try again.", "error"); 
+      showToast("Error updating password. Please try again.", "error");
       console.error("Error updating password", error);
     }
   };
@@ -35,15 +70,35 @@ export default function ChangePassword() {
     <section className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
       <form onSubmit={handleChange} className="bg-gray-800 p-8 rounded shadow-md max-w-md w-full">
         <h2 className="text-2xl font-bold mb-6 text-center">Change Your Password</h2>
+        
         <input
           type="password"
-          className="form-input w-full mb-4"
+          className="form-input w-full mb-2 text-black p-2 rounded"
           placeholder="New Password"
           value={newPassword}
-          onChange={(e) => setNewPassword(e.target.value)}
+          onChange={(e) => {
+            const value = e.target.value;
+            setNewPassword(value);
+            setStrength(evaluateStrength(value));
+            setError("");
+          }}
           required
         />
-        <button type="submit" className="btn w-full bg-indigo-600 hover:bg-indigo-700">
+
+        {/* Password Strength Bar */}
+        <div className="h-2 bg-gray-700 rounded mb-2 overflow-hidden">
+          <div className={`h-full ${getStrengthColor()} transition-all duration-300`}></div>
+        </div>
+
+        {/* Helper Text */}
+        <p className="text-sm text-gray-400 mb-4">
+          Must be at least 8 characters and include an uppercase letter, lowercase letter, number, and special character.
+        </p>
+
+        {/* Error Text */}
+        {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
+
+        <button type="submit" className="btn w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded">
           Update Password
         </button>
       </form>

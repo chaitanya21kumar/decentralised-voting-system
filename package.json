@@ -21,6 +21,7 @@
     "bcryptjs": "^3.0.2",
     "cookie": "^1.0.2",
     "dotenv": "^16.4.7",
+    "firebase": "^11.8.1",
     "formidable": "^3.5.2",
     "framer-motion": "^12.15.0",
     "js-cookie": "^3.0.5",
