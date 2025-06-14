@@ -1,9 +1,7 @@
-// pages/api/admin/processCandidates.ts
-
 import type { NextApiRequest, NextApiResponse } from "next";
 import axios from "axios";
-import dbConnect from "../../../lib/mongodb"; // your MongoDB connection util
-import IpfsHash from "../../../models/IpfsHash"; // model we just defined
+import dbConnect from "../../../lib/mongodb"; // your MongoDB connection utility
+import IpfsHash from "../../../models/IpfsHash"; // model for storing IPFS hashes
 import fs from "fs";
 import path from "path";
 const Web3 = require("web3");
@@ -53,14 +51,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
     await voting.setElectionDetails(
       "Alice Johnson",              // adminName
-      "alice@example.com",          // adminEmail
+      "test@gmail.com",          // adminEmail
       "Chief Electoral Officer",    // adminTitle
       "2025 Student Council Polls", // electionTitle
       "ABC Institute of Technology",// organizationTitle
       4,                            // maxVotes
       { from: admin }
     );
-    await voting.startElection(10, { from: admin });
+    await voting.startElection(20, { from: admin });
 
     for (const candidate of candidates) {
       const tx = await voting.addCandidate(candidate.name, candidate.agenda, { from: admin });

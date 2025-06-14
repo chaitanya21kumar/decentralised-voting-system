@@ -4,9 +4,10 @@
 /node_modules
 /.pnp
 .pnp.js
+.env
 
 # testing
-/coverage
+/test
 
 # next.js
 /.next/
@@ -37,9 +38,6 @@ next-env.d.ts
 
 # contentlayer
 .contentlayer
-
-node_modules
-.env
 
 # Hardhat files
 /cache
