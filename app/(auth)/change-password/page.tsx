@@ -1,20 +1,27 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { showToast } from "../../../pages/api/admin/showToast";
+import { Eye, EyeOff } from "lucide-react";
 
 export default function ChangePassword() {
   const router = useRouter();
+
   const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showNew, setShowNew] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState("");
   const [strength, setStrength] = useState<"weak" | "medium" | "strong" | "">("");
+
+  const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
+  const lastStrength = useRef<string>("");
 
   const evaluateStrength = (password: string): "weak" | "medium" | "strong" | "" => {
     if (!password) return "";
     const strongRegex = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
     const mediumRegex = /^((?=.*[A-Z])(?=.*[a-z])(?=.*\d)|(?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&]))[A-Za-z\d@$!%*?&]{6,}$/;
-
     if (strongRegex.test(password)) return "strong";
     if (mediumRegex.test(password)) return "medium";
     return "weak";
@@ -38,6 +45,26 @@ export default function ChangePassword() {
     return strongRegex.test(password);
   };
 
+  // Debounced password strength evaluation
+  useEffect(() => {
+    if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
+    if (!newPassword) {
+      setStrength("");
+      return;
+    }
+    debounceTimeout.current = setTimeout(() => {
+      const currentStrength = evaluateStrength(newPassword);
+      setStrength(currentStrength);
+
+      if (currentStrength !== lastStrength.current) {
+        lastStrength.current = currentStrength;
+        if (currentStrength === "weak") showToast("Weak password", "error");
+        else if (currentStrength === "medium") showToast("Medium strength password", "warning");
+        else if (currentStrength === "strong") showToast("Strong password 💪", "success");
+      }
+    }, 300); // 300ms debounce
+  }, [newPassword]);
+
   const handleChange = async (e: React.FormEvent) => {
     e.preventDefault();
     const voterId = localStorage.getItem("voterId");
@@ -52,53 +79,98 @@ export default function ChangePassword() {
       return;
     }
 
+    if (newPassword !== confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
     try {
-      await axios.post("/api/admin/change-password", {
-        voterId,
-        newPassword,
-      });
+      await axios.post("/api/admin/change-password", { voterId, newPassword });
       localStorage.removeItem("voterId");
-      showToast("Password updated successfully. Please log in again.", "success");
-      router.push("/");
+      showToast("Password updated successfully.", "success");
+      router.push("/signinusers");
     } catch (error) {
       showToast("Error updating password. Please try again.", "error");
       console.error("Error updating password", error);
     }
   };
 
-  return (
-    <section className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
-      <form onSubmit={handleChange} className="bg-gray-800 p-8 rounded shadow-md max-w-md w-full">
-        <h2 className="text-2xl font-bold mb-6 text-center">Change Your Password</h2>
-        
-        <input
-          type="password"
-          className="form-input w-full mb-2 text-black p-2 rounded"
-          placeholder="New Password"
-          value={newPassword}
-          onChange={(e) => {
-            const value = e.target.value;
-            setNewPassword(value);
-            setStrength(evaluateStrength(value));
-            setError("");
-          }}
-          required
-        />
+  const inputStyles =
+    "w-full mb-2 text-black p-2 rounded pr-10 focus:outline-none focus:ring-2 focus:ring-indigo-500";
 
-        {/* Password Strength Bar */}
+  return (
+    <section className="min-h-screen flex items-center justify-center bg-gray-900 text-white px-4">
+      <form onSubmit={handleChange} className="bg-gray-800 p-8 rounded-xl shadow-lg max-w-md w-full">
+        <h2 className="text-2xl font-bold mb-6 text-center">Change Your Password</h2>
+
+        {/* New Password Field */}
+        <div className="relative mb-2">
+          <input
+            type={showNew ? "text" : "password"}
+            className={inputStyles}
+            placeholder="New Password"
+            value={newPassword}
+            onChange={(e) => {
+              setNewPassword(e.target.value);
+              setError("");
+            }}
+            required
+          />
+          <button
+            type="button"
+            className="absolute top-2 right-3 text-gray-600 hover:text-white"
+            onClick={() => setShowNew(!showNew)}
+          >
+            {showNew ? <EyeOff size={20} /> : <Eye size={20} />}
+          </button>
+        </div>
+
+        {/* Strength Bar */}
         <div className="h-2 bg-gray-700 rounded mb-2 overflow-hidden">
           <div className={`h-full ${getStrengthColor()} transition-all duration-300`}></div>
         </div>
 
+        {/* Confirm Password Field */}
+        <div className="relative mb-2">
+          <input
+            type={showConfirm ? "text" : "password"}
+            className={inputStyles}
+            placeholder="Confirm Password"
+            value={confirmPassword}
+            onChange={(e) => {
+              setConfirmPassword(e.target.value);
+              setError("");
+            }}
+            required
+          />
+          <button
+            type="button"
+            className="absolute top-2 right-3 text-gray-600 hover:text-white"
+            onClick={() => setShowConfirm(!showConfirm)}
+          >
+            {showConfirm ? <EyeOff size={20} /> : <Eye size={20} />}
+          </button>
+        </div>
+
+        {/* Match Indicator */}
+        {confirmPassword.length > 0 && (
+          <p className={`text-sm mb-2 ${newPassword === confirmPassword ? "text-green-400" : "text-red-400"}`}>
+            {newPassword === confirmPassword ? "✅ Passwords match" : "❌ Passwords do not match"}
+          </p>
+        )}
+
         {/* Helper Text */}
-        <p className="text-sm text-gray-400 mb-4">
-          Must be at least 8 characters and include an uppercase letter, lowercase letter, number, and special character.
+        <p className="text-sm text-gray-400 mb-3">
+          Must be at least 8 characters and include uppercase, lowercase, number, and special character.
         </p>
 
-        {/* Error Text */}
+        {/* Error Message */}
         {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
 
-        <button type="submit" className="btn w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded">
+        <button
+          type="submit"
+          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded transition"
+        >
           Update Password
         </button>
       </form>

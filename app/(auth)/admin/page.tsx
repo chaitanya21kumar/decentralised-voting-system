@@ -21,7 +21,7 @@ export default function SignIn() {
 
     try {
       const response = await axios.post("/api/admin/login", { email, password });
-
+      
       if (response.status === 200) {
         showToast("Login successful!", "success");
         router.push("/admin_page");
