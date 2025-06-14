@@ -3,18 +3,23 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
- contract Voting is ReentrancyGuard {
-    address public superAdmin; // Primary administrator
+/// @title Decentralized Voting Contract
+/// @notice Manages elections: candidate registration, voter registration, voting, and winner declaration
+contract Voting is ReentrancyGuard {
+    // --- State Variables ---
+    address public superAdmin;
+    bool public isPaused;
+    string public didRegistryCID;
+
     uint256 public candidateCount;
     uint256 public voterCount;
+
     uint256 public votingStart;
     uint256 public votingEnd;
-    bool public isPaused;
-    
-    string public didRegistryCID; // IPFS CID for off-chain voter DID registry
+    bool public detailsSet;
 
     struct Candidate {
-        uint256 candidateId;
+        uint256 id;
         string name;
         string slogan;
         uint256 votes;
@@ -30,60 +35,66 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
     }
 
     struct Voter {
-        address voterAddress;
+        address account;
         string name;
         string phone;
-        string did; // DID of the voter
+        string did;
         bool isVerified;
         bool isRegistered;
     }
 
-    ElectionDetails public Election;
-    mapping(address => Voter) private Voters;
-    mapping(uint256 => Candidate) public Candidates;
+    ElectionDetails public election;
+    mapping(address => Voter) private voters;
+    mapping(uint256 => Candidate) public candidates;
     mapping(address => bool) public admins;
     mapping(bytes32 => bool) private candidateNameExists;
     mapping(address => bool) private hasVoted;
 
-    event CandidateAdded(uint256 candidateId, string name, string slogan);
-    event VoterRegistered(address voterAddress, string name);
-    event VoterVerified(address voterAddress, bool status);
-    event VoteCast(address voter, uint256 candidateId);
+    // --- Events ---
+    event DIDRegistryUpdated(string cid);
+    event AdminAdded(address indexed admin);
+    event AdminRemoved(address indexed admin);
+    event ElectionDetailsSet(string title, uint256 maxVotes);
     event ElectionStarted(uint256 startTime, uint256 endTime);
     event ElectionEnded(uint256 endTime);
-    event WinnerDeclared(uint256 candidateId, string name, uint256 votes);
-    event AdminAdded(address adminAddress);
-    event AdminRemoved(address adminAddress);
-    event ElectionDetailsUpdated(string field, string newValue);
-    event ContractPaused(bool isPaused);
-    event DIDRegistryUpdated(string cid);
+    event CandidateAdded(uint256 indexed id, string name);
+    event VoterRegistered(address indexed voter, string name);
+    event VoterVerified(address indexed voter);
+    event VoteCast(address indexed voter, uint256 indexed candidateId);
+    event WinnerDeclared(uint256 indexed candidateId, string name, uint256 votes);
+    event ContractPaused(bool paused);
 
-    modifier isSuperAdmin() {
-        require(msg.sender == superAdmin, "Only super admin allowed");
+    // --- Modifiers ---
+    modifier onlySuperAdmin() {
+        require(msg.sender == superAdmin, "Only super admin");
         _;
     }
 
-    modifier isAdmin() {
-        require(admins[msg.sender], "Only admin allowed");
-        _;
-    }
-
-    modifier onlyWhenVotingActive() {
-        require(block.timestamp >= votingStart && block.timestamp <= votingEnd, "Voting is not active");
-        _;
-    }
-
-    modifier onlyWhenVotingEnded() {
-        require(block.timestamp > votingEnd, "Voting has not ended");
+    modifier onlyAdmin() {
+        require(admins[msg.sender], "Only admin");
         _;
     }
 
     modifier notPaused() {
-        require(!isPaused, "Contract is paused");
+        require(!isPaused, "Paused");
         _;
     }
 
-    // Constructor - Takes IPFS CID for DID Registry
+    modifier onlyWhenVotingActive() {
+        if (votingEnd != 0 && block.timestamp > votingEnd) {
+            _endElectionInternal();
+        }
+        require(block.timestamp >= votingStart && block.timestamp <= votingEnd, "Voting not active");
+        _;
+    }
+
+    modifier onlyWhenVotingEnded() {
+        require(votingEnd != 0 && block.timestamp > votingEnd, "Voting not ended");
+        _;
+    }
+
+    // --- Constructor ---
+    /// @param _didRegistryCID IPFS CID for DID registry
     constructor(string memory _didRegistryCID) {
         superAdmin = msg.sender;
         admins[msg.sender] = true;
@@ -91,124 +102,166 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
         emit DIDRegistryUpdated(_didRegistryCID);
     }
 
-    // Update DID Registry CID (if needed)
-    function updateDIDRegistry(string memory _newCID) external isSuperAdmin {
-        didRegistryCID = _newCID;
-        emit DIDRegistryUpdated(_newCID);
+    // --- Admin Functions ---
+    function updateDIDRegistry(string memory _cid) external onlySuperAdmin {
+        didRegistryCID = _cid;
+        emit DIDRegistryUpdated(_cid);
     }
 
-    function getDIDRegistryCID() public view returns (string memory) {
-        return didRegistryCID;
+    function addAdmin(address _admin) external onlySuperAdmin {
+        require(!admins[_admin], "Already admin");
+        admins[_admin] = true;
+        emit AdminAdded(_admin);
     }
 
-    // Admin Management
-    function addAdmin(address adminAddress) external isSuperAdmin {
-        require(!admins[adminAddress], "Already an admin");
-        admins[adminAddress] = true;
-        emit AdminAdded(adminAddress);
+    function removeAdmin(address _admin) external onlySuperAdmin {
+        require(admins[_admin], "Not an admin");
+        admins[_admin] = false;
+        emit AdminRemoved(_admin);
     }
 
-    function removeAdmin(address adminAddress) external isSuperAdmin {
-        require(admins[adminAddress], "Not an admin");
-        admins[adminAddress] = false;
-        emit AdminRemoved(adminAddress);
-    }
-
-    // Election Management
+    // --- Election Setup ---
+    /// @notice Sets up election parameters before starting
     function setElectionDetails(
-        string memory adminName,
-        string memory adminEmail,
-        string memory adminTitle,
-        string memory electionTitle,
-        string memory organizationTitle,  
-        uint256 maxVotes
-    ) external isAdmin {
-        Election = ElectionDetails({
-            adminName: adminName,
-            adminEmail: adminEmail,
-            adminTitle: adminTitle,
-            electionTitle: electionTitle,
-            organizationTitle: organizationTitle,
-            maxVotesPerCandidate: maxVotes
+        string memory _adminName,
+        string memory _adminEmail,
+        string memory _adminTitle,
+        string memory _electionTitle,
+        string memory _organizationTitle,
+        uint256 _maxVotes
+    ) external onlyAdmin notPaused {
+        require(bytes(_electionTitle).length > 0, "Title required");
+        require(_maxVotes > 0, "Max votes must be > 0");
+
+        election = ElectionDetails({
+            adminName: _adminName,
+            adminEmail: _adminEmail,
+            adminTitle: _adminTitle,
+            electionTitle: _electionTitle,
+            organizationTitle: _organizationTitle,
+            maxVotesPerCandidate: _maxVotes
         });
+        detailsSet = true;
+        emit ElectionDetailsSet(_electionTitle, _maxVotes);
     }
 
-    function startElection(uint256 durationInMinutes) external isAdmin notPaused {
-        require(votingStart == 0 || block.timestamp > votingEnd, "Previous election ongoing");
+    /// @notice Starts the election period
+    /// @param durationMinutes Duration in minutes
+    function startElection(uint256 durationMinutes) external onlyAdmin notPaused {
+        require(detailsSet, "Details not set");
+        require(votingStart == 0 || block.timestamp > votingEnd, "Ongoing election");
+
         votingStart = block.timestamp;
-        votingEnd = votingStart + (durationInMinutes * 1 minutes);
+        votingEnd = votingStart + durationMinutes * 1 minutes;
         emit ElectionStarted(votingStart, votingEnd);
     }
 
-    function endElection() external isAdmin notPaused {
-        require(block.timestamp >= votingEnd, "Voting time not over");
+    /// @notice Manually ends election if needed
+    function endElection() external onlyAdmin notPaused onlyWhenVotingEnded {
+        _endElectionInternal();
+    }
+
+    // --- Internal ---
+    function _endElectionInternal() internal {
         votingStart = 0;
         votingEnd = 0;
         emit ElectionEnded(block.timestamp);
     }
 
-    // Candidate Management 
-    function addCandidate(string memory name, string memory slogan) external isAdmin notPaused {
-        require(bytes(name).length > 0, "Candidate name required");
-        bytes32 nameHash = keccak256(abi.encodePacked(name));
-        // Check using mapping for duplicate candidate names
-        require(!candidateNameExists[nameHash], "Duplicate candidate name");
-        
-        Candidates[candidateCount] = Candidate(candidateCount, name, slogan, 0);
-        candidateNameExists[nameHash] = true; // Mark candidate name as added
-        emit CandidateAdded(candidateCount, name, slogan);
+    // --- Candidate Management ---
+    function addCandidate(string memory _name, string memory _slogan) external onlyAdmin notPaused {
+        require(bytes(_name).length > 0, "Name required");
+        bytes32 hash = keccak256(abi.encodePacked(_name));
+        require(!candidateNameExists[hash], "Duplicate candidate");
+
+        candidates[candidateCount] = Candidate(candidateCount, _name, _slogan, 0);
+        candidateNameExists[hash] = true;
+        emit CandidateAdded(candidateCount, _name);
         candidateCount++;
     }
 
-    // Voter Management
-    function registerVoter(string memory name, string memory phone, string memory did) external notPaused {
-        require(!Voters[msg.sender].isRegistered, "Already registered");
-        Voters[msg.sender] = Voter(msg.sender, name, phone, did, false, true);
+    // --- Voter Management ---
+    function registerVoter(
+        string memory _name,
+        string memory _phone,
+        string memory _did
+    ) external notPaused {
+        require(!voters[msg.sender].isRegistered, "Already registered");
+
+        voters[msg.sender] = Voter(msg.sender, _name, _phone, _did, false, true);
         voterCount++;
-        emit VoterRegistered(msg.sender, name);
+        emit VoterRegistered(msg.sender, _name);
     }
 
-    function verifyVoter(address voterAddress, string memory did) external isAdmin notPaused {
-        require(Voters[voterAddress].isRegistered, "Voter not registered");
+    function verifyVoter(address _voter, string memory _did) external onlyAdmin notPaused {
+        require(voters[_voter].isRegistered, "Not registered");
+        require(
+            keccak256(abi.encodePacked(voters[_voter].did)) == keccak256(abi.encodePacked(_did)),
+            "DID mismatch"
+        );
 
-        // Fetch voter DID from IPFS (Off-chain validation happens here)
-        // This is done in the frontend using `didRegistryCID`
-
-        require(keccak256(abi.encodePacked(Voters[voterAddress].did)) == keccak256(abi.encodePacked(did)), "DID mismatch");
-
-        Voters[voterAddress].isVerified = true;
-        emit VoterVerified(voterAddress, true);
+        voters[_voter].isVerified = true;
+        emit VoterVerified(_voter);
     }
 
-    // Voting with Reentrancy Guard for security improvement
-    function vote(uint256 candidateId) external onlyWhenVotingActive notPaused nonReentrant {
-        require(Voters[msg.sender].isVerified, "Not verified");
+    // --- Voting ---
+    function vote(uint256 _candidateId)
+        external
+        onlyWhenVotingActive
+        notPaused
+        nonReentrant
+    {
+        require(voters[msg.sender].isVerified, "Not verified");
         require(!hasVoted[msg.sender], "Already voted");
-        require(candidateId < candidateCount, "Invalid candidate");
-        require(Candidates[candidateId].votes < Election.maxVotesPerCandidate, "Vote limit reached");
-        Candidates[candidateId].votes++;
+        require(_candidateId < candidateCount, "Invalid candidate");
+        require(
+            candidates[_candidateId].votes < election.maxVotesPerCandidate,
+            "Vote limit reached"
+        );
+
+        candidates[_candidateId].votes++;
         hasVoted[msg.sender] = true;
-        emit VoteCast(msg.sender, candidateId);
+        emit VoteCast(msg.sender, _candidateId);
     }
 
-    // Utility Functions
-    function pauseContract(bool pause) external isSuperAdmin {
-        isPaused = pause;
-        emit ContractPaused(pause);
-    }
-
-    function declareWinner() external view isAdmin onlyWhenVotingEnded returns (uint256 winnerId, string memory winnerName, uint256 maxVotes) {
-        uint256 maxVoteCount = 0;
-        uint256 winnerIdx = 0;
+    // --- Results ---
+    function declareWinner()
+        external
+        onlyAdmin
+        onlyWhenVotingEnded
+        notPaused
+        returns (
+            uint256 winnerId,
+            string memory winnerName,
+            uint256 maxVotes
+        )
+    {
+        uint256 highest = 0;
+        uint256 idx;
         for (uint256 i = 0; i < candidateCount; i++) {
-            if (Candidates[i].votes > maxVoteCount) {
-                maxVoteCount = Candidates[i].votes;
-                winnerIdx = i;
+            if (candidates[i].votes > highest) {
+                highest = candidates[i].votes;
+                idx = i;
             }
         }
-        return (winnerIdx, Candidates[winnerIdx].name, maxVoteCount);
+        winnerId = idx;
+        winnerName = candidates[idx].name;
+        maxVotes = highest;
+        emit WinnerDeclared(winnerId, winnerName, maxVotes);
     }
-    function getCandidateCount() public view returns (uint256) {
+
+    // --- Pause ---
+    function pauseContract(bool _pause) external onlySuperAdmin {
+        isPaused = _pause;
+        emit ContractPaused(_pause);
+    }
+
+    // --- Helpers ---
+    function getCandidateCount() external view returns (uint256) {
         return candidateCount;
+    }
+
+    function getVoter(address _voter) external view returns (Voter memory) {
+        return voters[_voter];
     }
 }
