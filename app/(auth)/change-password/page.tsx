@@ -59,7 +59,7 @@ export default function ChangePassword() {
       if (currentStrength !== lastStrength.current) {
         lastStrength.current = currentStrength;
         if (currentStrength === "weak") showToast("Weak password", "error");
-        else if (currentStrength === "medium") showToast("Medium strength password", "warning");
+        else if (currentStrength === "medium") showToast("Medium strength password", "error");
         else if (currentStrength === "strong") showToast("Strong password 💪", "success");
       }
     }, 300); // 300ms debounce
