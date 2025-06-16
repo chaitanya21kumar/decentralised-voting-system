@@ -10,14 +10,15 @@ import { showToast } from "../../../pages/api/admin/showToast";
 export default function SignIn() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false); // 👈 show/hide state
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false); // 👈 loading state
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
-    setLoading(true); // 👈 start loading
+    setLoading(true);
 
     try {
       const response = await axios.post("/api/admin/signin", { email, password });
@@ -39,7 +40,7 @@ export default function SignIn() {
         showToast("Login failed. Try again later.", "error");
       }
     } finally {
-      setLoading(false); // 👈 stop loading
+      setLoading(false);
     }
   };
 
@@ -67,7 +68,7 @@ export default function SignIn() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                disabled={loading} // 👈 disabled while loading
+                disabled={loading}
               />
             </div>
 
@@ -77,16 +78,26 @@ export default function SignIn() {
                   Password
                 </label>
               </div>
-              <input
-                id="password"
-                type="password"
-                className="form-input w-full"
-                placeholder="Your password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                disabled={loading} // 👈 disabled while loading
-              />
+              <div className="relative">
+                <input
+                  id="password"
+                  type={showPassword ? "text" : "password"} // 👈 toggle type
+                  className="form-input w-full pr-16"
+                  placeholder="Your password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)} // 👈 toggle show/hide
+                  className="absolute top-1/2 right-3 -translate-y-1/2 text-sm text-indigo-400 hover:text-indigo-300"
+                  disabled={loading}
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
             </div>
 
             {errorMessage && (
@@ -104,7 +115,7 @@ export default function SignIn() {
               <button
                 type="submit"
                 className="btn w-full bg-gradient-to-t from-indigo-600 to-indigo-500 text-white hover:bg-indigo-700"
-                disabled={loading} // 👈 prevent double submit
+                disabled={loading}
               >
                 {loading ? "Please wait..." : "Sign In"}
               </button>
