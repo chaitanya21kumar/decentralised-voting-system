@@ -5,7 +5,8 @@ import jwt from "jsonwebtoken";
 import { serialize } from "cookie";
 import type { NextApiRequest, NextApiResponse } from "next";
 
-const JWT_SECRET =  "All Is Well"; // Use a strong secret in production
+// Update in Production
+const JWT_SECRET =  "All Is Well"; 
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") return res.status(405).json({ message: "Method not allowed" });
