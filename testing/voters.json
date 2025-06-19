@@ -1,0 +1,15 @@
+[
+    {
+      "rollNumber": "21CS001",
+      "name": "Alice Parker",
+      "email": "alice@example.com",
+      "phoneNumber": "9991112223"
+    },
+    {
+      "rollNumber": "21CS002",
+      "name": "Bob Singh",
+      "email": "bob@example.com",
+      "phoneNumber": "9991112224"
+    }
+  ]
+  
