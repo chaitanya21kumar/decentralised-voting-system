@@ -1,5 +1,3 @@
-Temporary Read Me ( Instructions to run locally )
-
 git pull
 npm install
 ganache    # to run the Ganache server
