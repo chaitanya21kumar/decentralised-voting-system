@@ -1,43 +1,36 @@
-const fs = require('fs');
-const path = require('path');
+// scripts/deploy.js
+/**
+ * Deploys Voting.sol to the local Hardhat network
+ * and writes the address to frontend/artifacts/deployedAddress.json
+ */
+const hre  = require("hardhat");
+const fs   = require("fs");
+const path = require("path");
 
 async function main() {
-    const Web3 = require('web3');
-    const web3 = new Web3("http://127.0.0.1:8545");
+  // ── 1. Get the compiled contract factory
+  const Voting = await hre.ethers.getContractFactory("Voting");
 
-    const accounts = await web3.eth.getAccounts();
-    const deployer = accounts[0];
-    console.log("Deploying from account:", deployer);
+  // ── 2. Pass your DID-registry CID to the constructor
+  const didRegistryCID = "bafkreicjewvz7tni4x5t4fg22vp7chcslamoco6q2fomchepbvcaygaqk4";
 
-    const contractPath = path.resolve(__dirname, '../artifacts/contracts/Voting.sol/Voting.json');
-    const { abi, bytecode } = JSON.parse(fs.readFileSync(contractPath, 'utf8'));
+  // ── 3. Deploy
+  const voting = await Voting.deploy(didRegistryCID);
+  await voting.waitForDeployment();          // ← ethers v6 replacement for `.deployed()`
 
-    const Voting = new web3.eth.Contract(abi);
+  const address = await voting.getAddress();
+  console.log("Voting deployed to:", address);
 
-    const didRegistryCID = "QmXhdNqXYJsWb1L8gQZNTDz6sCoUPnR2NZqeiUbw1hHp8q";
-
-    const deployedContract = await Voting.deploy({
-        data: bytecode,
-        arguments: [didRegistryCID],
-    }).send({
-        from: deployer,
-        gas: 5000000,
-    });
-
-    const frontendDir = path.resolve(__dirname, "../frontend/artifacts");
-    if (!fs.existsSync(frontendDir)) fs.mkdirSync(frontendDir, { recursive: true });
-
-    fs.writeFileSync(
-        path.join(frontendDir, "deployedAddress.json"),
-        JSON.stringify({ address: deployedContract.options.address }, null, 2)
-    );
-
-    console.log("Contract deployed at:", deployedContract.options.address);
+  // ── 4. Persist the address for the frontend/API
+  const outDir = path.join(__dirname, "..", "frontend", "artifacts");
+  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(outDir, "deployedAddress.json"),
+    JSON.stringify({ address }, null, 2)
+  );
 }
 
-main()
-  .then(() => process.exit(0))
-  .catch((error) => {
-      console.error(error);
-      process.exit(1);
-  });
+main().catch((err) => {
+  console.error(err);
+  process.exitCode = 1;
+});
