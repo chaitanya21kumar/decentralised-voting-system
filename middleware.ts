@@ -2,40 +2,60 @@
 import { NextRequest, NextResponse } from "next/server";
 
 // Define protected routes
-const protectedRoutes = ["/voter", "/results", "/candidates", "/change-password", "/signinusers", "/admin_page"];
+const protectedRoutes = [
+  "/voter",
+  "/results",
+  "/candidates",
+  "/change-password",
+  "/signinusers",
+  "/admin_page",
+];
 
 export function middleware(request: NextRequest) {
-  const path = request.nextUrl.pathname;
-  const isProtected = protectedRoutes.includes(path);
-  // Check if the user is logged in by looking for a cookie
-  if (path === "/admin_page") {
-    const isadminLoggedIn = request.cookies.get("adminToken")?.value;
-  
-    if (isProtected && !isadminLoggedIn) {
+  const { pathname } = request.nextUrl;
+  let response: NextResponse;
+
+  // 1. Authentication checks & possible redirects
+  if (pathname === "/admin_page") {
+    const isAdminLoggedIn = request.cookies.get("adminToken")?.value;
+    if (!isAdminLoggedIn) {
       const url = request.nextUrl.clone();
       url.pathname = "/admin";
-      return NextResponse.redirect(url);
+      response = NextResponse.redirect(url);
     }
-
-
-  }
-  else {
-    const isvoterLoggedIn = request.cookies.get("voterToken")?.value;
-    // If trying to access a protected page without being logged in
-    if (isProtected && !isvoterLoggedIn) {
+  } else if (protectedRoutes.includes(pathname)) {
+    const isVoterLoggedIn = request.cookies.get("voterToken")?.value;
+    if (!isVoterLoggedIn) {
       const url = request.nextUrl.clone();
       url.pathname = "/signin";
-      return NextResponse.redirect(url);
+      response = NextResponse.redirect(url);
     }
   }
 
+  // 2. Default to a normal response if no redirect
+  if (!response) {
+    response = NextResponse.next();
+  }
 
+  // 3. Add Content Security Policy header:
+  //    - In production: include report-uri (to /api/csp-report)
+  //    - In development: simple CSP without reporting
+  const csp = process.env.NODE_ENV === "production"
+    ? "default-src 'self'; report-uri /api/csp-report"
+    : "default-src 'self'";
+  response.headers.set("Content-Security-Policy", csp);
 
-
-  return NextResponse.next();
+  return response;
 }
 
 // Apply middleware only to these routes
 export const config = {
-  matcher: ["/voter", "/results", "/candidates", "/change-password", "/signinusers", "/admin_page"],
+  matcher: [
+    "/voter",
+    "/results",
+    "/candidates",
+    "/change-password",
+    "/signinusers",
+    "/admin_page",
+  ],
 };
