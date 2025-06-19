@@ -9,29 +9,25 @@ import bcrypt from "bcryptjs";
 import nodemailer from "nodemailer";
 import fs from "fs";
 import path from "path";
+import { votingAddress } from "../../../app/artifacts/votingArtifact";
 const Web3 = require("web3");
-const contract = require("@truffle/contract");
 
-
-
-
-// 3. Random password generator
+// 1. Random password generator
 const generatePassword = (length = 8) => {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
   return Array.from({ length }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
 };
 
-// 4. Nodemailer setup
+// 2. Nodemailer setup
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
     user: "prproject201@gmail.com",
-    pass: "hzhy qwmk rqvw jzid",
+    pass: "hzhy qwmk rqvw jzid", // 🔒 consider using env vars
   },
-  socketTimeout: 10000, // 10 seconds
+  socketTimeout: 10000,
 });
 
-// 5. API Handler
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ success: false, message: "Only POST method allowed" });
@@ -41,47 +37,49 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   if (!ipfsHash) {
     return res.status(400).json({ success: false, message: "Missing IPFS hash" });
   }
-   const provider = new Web3.providers.HttpProvider("http://127.0.0.1:8545");
-    const web3 = new Web3(provider);
-
-    const artifactPath = path.join(process.cwd(), "build/contracts/Voting.json");
-    const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
-    const Voting = contract(artifact);
-    Voting.setProvider(provider);
-
-    // Compatibility patch
-    if (typeof Voting.currentProvider.sendAsync !== "function") {
-      Voting.currentProvider.sendAsync = function () {
-        return Voting.currentProvider.send.apply(Voting.currentProvider, arguments);
-      };
-    }
-
-    const accounts = await web3.eth.getAccounts();
-    const admin = accounts[0];
-    const voting = await Voting.deployed();
 
   try {
-     await connectToDatabase();
+    await connectToDatabase();
 
+    // Initialize web3
+    const web3 = new Web3("http://127.0.0.1:8545");
+    const accounts = await web3.eth.getAccounts();
+    const admin =accounts[0];
+
+    // Load ABI + address
+    const artifactPath = path.resolve(process.cwd(), "artifacts/contracts/Voting.sol/Voting.json");
+    const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
+
+    // Replace with actual deployed address
+    const contractAddress =votingAddress;
+
+    const voting = new web3.eth.Contract(artifact.abi, contractAddress);
+
+    // Get voter list from IPFS
     const ipfsUrl = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
     const { data: voters } = await axios.get(ipfsUrl);
 
     const results = [];
-    let i=1;
-    for (const voter of voters) {
+
+    for (let i = 0; i < voters.length; i++) {
+      const voter = voters[i];
       const password = generatePassword();
       const passwordHash = await bcrypt.hash(password, 10);
-      const Ethaccount = accounts[i];
+      const voterAccount = accounts[i + 1]; // start from index 1 to skip admin
 
-      await voting.registerVoter(voter.name, voter.phoneNumber, voter.rollNumber, { from: Ethaccount });
-      i++;
-      // Save to DB
+      // Register on blockchain
+      await voting.methods
+  .registerVoter(voter.name, voter.phoneNumber, voter.rollNumber)
+  .send({ from:voterAccount , gas: 1000000 }); 
+
+
+      // Save in DB
       const voterDoc = new Voter({
         rollNumber: voter.rollNumber,
         name: voter.name,
         email: voter.email,
         phoneNumber: voter.phoneNumber,
-        Ethaccount : Ethaccount,
+        Ethaccount: voterAccount,
         mustChangePassword: true,
         passwordHash,
         ipfsHash,
@@ -90,10 +88,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Send email
       await transporter.sendMail({
-        from: process.env.EMAIL_USER,
+        from: process.env.EMAIL_USER || "prproject201@gmail.com",
         to: voter.email,
         subject: "Your Voting Credentials",
-        html: `<p>Hello ${voter.name},</p><P>Your system-generated password is: <strong>${password}</strong></p><p>Keep this confidential.</p>`,
+        html: `<p>Hello ${voter.name},</p><p>Your system-generated password is: <strong>${password}</strong></p><p>Keep this confidential.</p>`,
       });
 
       results.push({ email: voter.email, status: "success" });

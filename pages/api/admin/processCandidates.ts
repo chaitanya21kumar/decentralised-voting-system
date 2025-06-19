@@ -1,12 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import axios from "axios";
-import dbConnect from "../../../lib/mongodb"; // your MongoDB connection utility
-import IpfsHash from "../../../models/IpfsHash"; // model for storing IPFS hashes
+import dbConnect from "../../../lib/mongodb";
+import IpfsHash from "../../../models/IpfsHash";
 import fs from "fs";
 import path from "path";
+import { votingAddress } from "../../../app/artifacts/votingArtifact";
 const Web3 = require("web3");
-const contract = require("@truffle/contract");
-
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -15,55 +14,62 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     const { ipfsHash } = req.body;
-    await dbConnect();
-    await IpfsHash.create({
-      hash: ipfsHash,
-      type: "candidates",
-    });
 
     if (!ipfsHash) {
       return res.status(400).json({ success: false, message: "Missing IPFS hash" });
     }
 
-    const provider = new Web3.providers.HttpProvider("http://127.0.0.1:8545");
-    const web3 = new Web3(provider);
+    await dbConnect();
 
-    const artifactPath = path.join(process.cwd(), "build/contracts/Voting.json");
-    const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
-    const Voting = contract(artifact);
-    Voting.setProvider(provider);
+    await IpfsHash.create({
+      hash: ipfsHash,
+      type: "candidates",
+    });
 
-    // Compatibility patch
-    if (typeof Voting.currentProvider.sendAsync !== "function") {
-      Voting.currentProvider.sendAsync = function () {
-        return Voting.currentProvider.send.apply(Voting.currentProvider, arguments);
-      };
-    }
-
+    const web3 = new Web3("http://127.0.0.1:8545");
     const accounts = await web3.eth.getAccounts();
     const admin = accounts[0];
-    const voting = await Voting.deployed();
+    console.log("Admin account:", admin);
 
+    // Load Hardhat-generated ABI
+    const artifactPath = path.resolve(process.cwd(), "artifacts/contracts/Voting.sol/Voting.json");
+    const artifact = JSON.parse(fs.readFileSync(artifactPath, "utf8"));
+
+    // Replace with deployed contract address
+    const contractAddress =votingAddress ;
+    const voting = new web3.eth.Contract(artifact.abi, contractAddress);
+
+    // Get candidates from IPFS
     const ipfsUrl = `https://gateway.pinata.cloud/ipfs/${ipfsHash}`;
     const { data: candidates } = await axios.get(ipfsUrl);
+
     if (!Array.isArray(candidates) || candidates.length === 0) {
       return res.status(400).json({ success: false, message: "Invalid or empty candidates data" });
     }
-    await voting.setElectionDetails(
-      "Alice Johnson",              // adminName
-      "test@gmail.com",          // adminEmail
-      "Chief Electoral Officer",    // adminTitle
-      "2025 Student Council Polls", // electionTitle
-      "ABC Institute of Technology",// organizationTitle
-      4,                            // maxVotes
-      { from: admin }
-    );
-    await voting.startElection(20, { from: admin });
+
+    // Set election and start
+    await voting.methods
+      .setElectionDetails(
+        "Alice Johnson",              // adminName
+        "test@gmail.com",             // adminEmail
+        "Chief Electoral Officer",    // adminTitle
+        "2025 Student Council Polls", // electionTitle
+        "ABC Institute of Technology",// organizationTitle
+        4                             // maxVotes
+      )
+      .send({ from: admin , gas: 1000000});
+
+    await voting.methods.startElection(5).send({ from: admin });
 
     for (const candidate of candidates) {
-      const tx = await voting.addCandidate(candidate.name, candidate.agenda, { from: admin });
-      console.log(`Candidate added: ${candidate.name}, Transaction Hash: ${tx.tx}`);
+      console.log("Candidate from IPFS:", candidate);
+console.log("Name length:", candidate.name.length);
+console.log("Agenda length:", candidate.agenda.length);
+      const tx = await voting.methods
+        .addCandidate(candidate.name, candidate.agenda)
+        .send({ from: admin, gas: 1000000 });
 
+      console.log(`Candidate added: ${candidate.name}, Tx Hash: ${tx.transactionHash}`);
     }
 
     return res.status(200).json({ success: true, message: "Candidates processed successfully" });

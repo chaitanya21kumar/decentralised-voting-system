@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "test": "npx hardhat test",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
@@ -20,7 +21,6 @@
     "axios": "^1.8.4",
     "bcryptjs": "^3.0.2",
     "cookie": "^1.0.2",
-    "dotenv": "^16.4.7",
     "firebase": "^11.8.1",
     "formidable": "^3.5.2",
     "framer-motion": "^12.15.0",
@@ -37,18 +37,22 @@
     "solc": "^0.8.28",
     "sonner": "^2.0.3",
     "twilio": "^5.6.1",
-    "typescript": "^5.3.3",
-    "web3": "^1.8.2"
+    "typescript": "^5.3.3"
   },
   "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^5.0.0",
+    "@nomiclabs/hardhat-web3": "^2.0.1",
     "@tailwindcss/forms": "^0.5.7",
     "@types/aos": "^3.0.7",
     "@types/formidable": "^3.4.5",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/nodemailer": "^6.4.17",
     "autoprefixer": "^10.4.16",
+    "dotenv": "^16.5.0",
+    "hardhat": "^2.24.3",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.3.6",
-    "ts-node": "^10.9.2"
+    "ts-node": "^10.9.2",
+    "web3": "^1.10.4"
   }
 }
