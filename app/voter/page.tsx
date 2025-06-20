@@ -1,12 +1,13 @@
+ 
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-const Web3 = require("web3");
-const contract = require("@truffle/contract");
 import axios from "axios";
-import artifact from "../../build/contracts/Voting.json";
-import SignHeader from "@/components/ui/signHeader";
+import Web3 from "web3";
 import toast from "react-hot-toast";
+
+import { votingAbi, votingAddress } from "../artifacts/votingArtifact";
+import SignHeader from "@/components/ui/signHeader";
 import { showToast, showToastPromise } from "../../pages/api/admin/showToast";
 
 interface Candidate {
@@ -26,7 +27,20 @@ export default function VotingPage() {
     phoneNumber: "",
   });
   const [candidatesLoaded, setCandidatesLoaded] = useState(false);
-    const hasRun=useRef(false);
+  const hasRun = useRef(false);
+
+  const getContractInstance = async () => {
+    const web3 = new Web3(
+      typeof window !== "undefined" && (window as any).ethereum
+        ? (window as any).ethereum
+        : "http://127.0.0.1:8545"
+    );
+
+    const accounts = await web3.eth.getAccounts();
+    const instance = new web3.eth.Contract( votingAbi as any, votingAddress);
+
+    return { voting: instance, account: accounts[0] };
+  };
 
   useEffect(() => {
     const fetchVoter = async () => {
@@ -51,9 +65,8 @@ export default function VotingPage() {
   }, []);
 
   useEffect(() => {
-     if (hasRun.current) return; 
-    hasRun.current = true; 
-    if (candidatesLoaded) return;
+    if (hasRun.current || candidatesLoaded) return;
+    hasRun.current = true;
 
     const fetchCandidates = async () => {
       const toastId = toast.loading("Fetching candidates...");
@@ -83,27 +96,6 @@ export default function VotingPage() {
     fetchCandidates();
   }, [candidatesLoaded]);
 
-  const getContractInstance = async () => {
-    const provider =
-      typeof window !== "undefined" && (window as any).ethereum
-        ? new Web3((window as any).ethereum)
-        : new Web3.providers.HttpProvider("http://127.0.0.1:8545");
-
-    const web3 = new Web3(provider);
-    const Voting = contract(artifact);
-    Voting.setProvider(provider);
-
-    if (typeof Voting.currentProvider.sendAsync !== "function") {
-      Voting.currentProvider.sendAsync = function (...args: any[]) {
-        return Voting.currentProvider.send.apply(Voting.currentProvider, args);
-      };
-    }
-
-    const accounts = await web3.eth.getAccounts();
-    const instance = await Voting.deployed();
-    return { voting: instance, account: accounts[0] };
-  };
-
   const handleRegister = async () => {
     const { name, phoneNumber, rollNumber, accountnumber } = voterDetails;
 
@@ -114,7 +106,7 @@ export default function VotingPage() {
 
     const verifyPromise = (async () => {
       const { voting, account } = await getContractInstance();
-      await voting.verifyVoter(accountnumber, rollNumber, { from: account });
+      await voting.methods.verifyVoter(accountnumber, rollNumber).send({ from: account });
     })();
 
     showToastPromise(verifyPromise, {
@@ -137,25 +129,30 @@ export default function VotingPage() {
     }
 
     const votePromise = (async () => {
-      const { voting } = await getContractInstance();
+       const { name, phoneNumber, rollNumber, accountnumber } = voterDetails;
+      const { voting, account } = await getContractInstance();
       const candidateIndex = selectedCandidate - 1;
-      await voting.vote(candidateIndex, { from: voterDetails.accountnumber });
+      await voting.methods.vote(candidateIndex).send({ from: accountnumber });
     })();
 
     showToastPromise(votePromise, {
       loading: "Casting your vote...",
       success: `Vote cast successfully for candidate ID ${selectedCandidate}`,
       error: (err) => {
-        const message = err?.message || "";
-        if (message.includes("Not verified")) return "You are not a verified voter.";
-        if (message.includes("Already voted")) return "You have already voted.";
-        if (message.includes("Invalid candidate")) return "Invalid candidate selected.";
-        if (message.includes("Vote limit reached")) return "Vote limit reached.";
-        if (message.includes("Voting is not active")) return "Voting has ended.";
-        if (message.includes("Voter not registered")) return "You are not registered to vote.";
-        if (message.includes("Invalid account")) return "Invalid account address.";
-        return "Voting failed.";
-      },
+  const message = (err?.message || "").toLowerCase();
+  console.error("Voting error:", err); // Always log it for debug
+
+  if (message.includes("not verified")) return "You are not a verified voter.";
+  if (message.includes("already voted")) return "You have already voted.";
+  if (message.includes("invalid candidate")) return "Invalid candidate selected.";
+  if (message.includes("vote limit")) return "Vote limit reached.";
+  if (message.includes("voting is not active")) return "Voting has ended.";
+  if (message.includes("not registered")) return "You are not registered to vote.";
+  if (message.includes("invalid account")) return "Invalid account address.";
+  
+  return "Voting failed. Please check console for more info.";
+}
+,
     });
   };
 

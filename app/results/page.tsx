@@ -2,10 +2,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import Web3 from "web3";
 import SignHeader from "@/components/ui/signHeader";
-import artifact from "../../build/contracts/Voting.json";
+import { votingAbi, votingAddress } from "../artifacts/votingArtifact";
 import { showToast } from "../../pages/api/admin/showToast";
 import { motion } from "framer-motion";
-const contract = require("@truffle/contract");
 
 interface Candidate {
   candidateId: number;
@@ -44,7 +43,6 @@ export default function ResultsPage() {
     "Waiting for voting period to end...",
     "Analyzing voter data...",
     "Tallying the results...",
-   
   ];
 
   useEffect(() => {
@@ -60,25 +58,17 @@ export default function ResultsPage() {
 
     const fetchResults = async () => {
       const toastId = window.crypto.randomUUID();
-      // showToast("Waiting for election results...", "success", toastId);
 
       try {
-        const provider = new Web3.providers.HttpProvider("http://127.0.0.1:8545");
-        const web3 = new Web3(provider);
-        const Voting = contract(artifact);
-        Voting.setProvider(provider);
-
-        if (typeof Voting.currentProvider.sendAsync !== "function") {
-          Voting.currentProvider.sendAsync = function () {
-            return Voting.currentProvider.send.apply(Voting.currentProvider, arguments);
-          };
-        }
-
+        const web3 = new Web3("http://127.0.0.1:8545");
         const accounts = await web3.eth.getAccounts();
         const admin = accounts[0];
-        const voting = await Voting.deployed();
 
-        const votingEnd = (await voting.votingEnd()).toNumber();
+        // Replace this address with your deployed contract address from Hardhat
+        const deployedAddress = "0xYourContractAddressHere";
+        const voting = new web3.eth.Contract( votingAbi as any , votingAddress);
+
+        const votingEnd = Number(await voting.methods.votingEnd().call());
         votingEndRef.current = votingEnd;
 
         const latestBlock = await web3.eth.getBlock("latest");
@@ -90,7 +80,7 @@ export default function ResultsPage() {
           const currentTime = Number(currentBlock.timestamp);
           const totalDuration = votingEndRef.current! - startTimeRef.current!;
           const elapsed = currentTime - startTimeRef.current!;
-          const timeLeft = votingEndRef.current! - currentTime;
+          const timeLeft = votingEndRef.current! - currentTime+4;
 
           if (elapsed >= totalDuration) {
             setTimeLeftPercent(0);
@@ -115,6 +105,7 @@ export default function ResultsPage() {
           while (true) {
             const latestBlock = await web3.eth.getBlock("latest");
             const now = latestBlock.timestamp;
+            console.log("Current time:", now, "Voting end time:", votingEndRef.current);  
             if (Number(now) >= votingEndRef.current!) break;
 
             await web3.eth.sendTransaction({ from: admin, to: admin, value: 0 });
@@ -123,23 +114,24 @@ export default function ResultsPage() {
         };
 
         await waitUntilVotingEnds();
+
         clearInterval(interval);
+ 
+        await voting.methods.endElection().send({ from: admin });
+        const result = await voting.methods.declareWinner().call({ from: admin });
 
-        await voting.endElection({ from: admin });
-        const result = await voting.declareWinner({ from: admin });
-
-        const winnerId = result[0].toNumber();
+        const winnerId = Number(result[0]);
         const winnerName = result[1];
-        const maxVotes = result[2].toNumber();
+        const maxVotes = Number(result[2]);
         setWinner({ candidateId: winnerId, name: winnerName, votes: maxVotes });
 
-        const candidateCount = (await voting.candidateCount()).toNumber();
+        const candidateCount = Number(await voting.methods.candidateCount().call());
         let total = 0;
         const fetchedCandidates: Candidate[] = [];
 
         for (let i = 0; i < candidateCount; i++) {
-          const c = await voting.Candidates(i);
-          const votes = c.votes.toNumber();
+          const c = await voting.methods.Candidates(i).call();
+          const votes = Number(c.votes);
           fetchedCandidates.push({
             candidateId: i + 1,
             name: c.name,
@@ -152,8 +144,6 @@ export default function ResultsPage() {
         fetchedCandidates.sort((a, b) => b.votes - a.votes);
         setCandidates(fetchedCandidates);
         setTotalVotes(total);
-
-        // showToast("Election results loaded", "success", toastId);
       } catch (error) {
         console.error("Error fetching results:", error);
         showToast("Error fetching election results", "error", toastId);
@@ -164,6 +154,7 @@ export default function ResultsPage() {
 
     fetchResults();
   }, []);
+
 
   return (
     <section className="bg-gray-950 text-white min-h-screen">

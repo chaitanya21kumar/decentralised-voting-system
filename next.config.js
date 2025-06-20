@@ -8,17 +8,17 @@ const ContentSecurityPolicy = `
   object-src 'none';
   base-uri 'self';
   form-action 'self';
-  report-uri /api/csp-report;
+  report-uri /api/admin/csp-report;
 `;
 
 module.exports = {
   async headers() {
     return [
       {
-        source: "/(.*)", // apply to all routes
+        source: "/(.*)",
         headers: [
           {
-            key: "Content-Security-Policy-Report-Only", 
+            key: "Content-Security-Policy-Report-Only",
             value: ContentSecurityPolicy.replace(/\n/g, ""),
           },
           {
