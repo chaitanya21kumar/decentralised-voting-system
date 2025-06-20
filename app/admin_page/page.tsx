@@ -43,8 +43,9 @@ export default function UploadLists() {
       const voterIpfsHash = uploadRes.data.data.voterFile.ipfsHash;
       const candidateIpfsHash = uploadRes.data.data.candidateFile.ipfsHash;
 
-      await axios.post("/api/admin/processVoters", { ipfsHash: voterIpfsHash });
+    
       await axios.post("/api/admin/processCandidates", { ipfsHash: candidateIpfsHash });
+        await axios.post("/api/admin/processVoters", { ipfsHash: voterIpfsHash });
 
       showToast("Voter and Candidate files processed successfully!", "success");
       
