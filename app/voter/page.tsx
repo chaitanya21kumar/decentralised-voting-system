@@ -16,25 +16,25 @@ interface Candidate {
   votes:       number;
 }
 
+// include the DID here
 interface VoterSession {
   rollNumber:    string;
   accountNumber: string;
   name:          string;
   phoneNumber:   string;
+  did:           string;
 }
 
 export default function VotingPage() {
   const router = useRouter();
+  const [candidates, setCandidates] = useState<Candidate[]>([]);
+  const [rollInput, setRollInput]   = useState("");
+  const [voter, setVoter]           = useState<VoterSession|null>(null);
+  const [verified, setVerified]     = useState(false);
+  const [selected, setSelected]     = useState<number|null>(null);
+  const fetchedOnce                 = useRef(false);
 
-  // ─── STATE ───────────────────────────────────────────
-  const [candidates, setCandidates]      = useState<Candidate[]>([]);
-  const [rollInput,    setRollInput]     = useState("");
-  const [voter,        setVoter]         = useState<VoterSession|null>(null);
-  const [verified,     setVerified]      = useState(false);
-  const [selected,     setSelected]      = useState<number|null>(null);
-  const fetchedOnce                      = useRef(false);
-
-  // ─── 1. Load candidate list once ──────────────────────
+  // 1) Load candidates
   useEffect(() => {
     if (fetchedOnce.current) return;
     fetchedOnce.current = true;
@@ -42,14 +42,12 @@ export default function VotingPage() {
     axios.get("/api/admin/getCandidates")
       .then(res => {
         if (res.data.success) {
-          setCandidates(
-            res.data.candidates.map((c: any, i: number) => ({
-              candidateId: i + 1,
-              name:        c.name,
-              slogan:      c.agenda || c.slogan || "",
-              votes:       0,
-            }))
-          );
+          setCandidates(res.data.candidates.map((c: any, i: number) => ({
+            candidateId: i + 1,
+            name:        c.name,
+            slogan:      c.agenda || c.slogan || "",
+            votes:       0
+          })));
         } else {
           showToast("Failed to load candidates", "error");
         }
@@ -57,42 +55,38 @@ export default function VotingPage() {
       .catch(() => showToast("Error loading candidates", "error"));
   }, []);
 
-  // ─── HELPER: web3 + contract ──────────────────────────
+  // helper to get contract + admin account
   const getContract = async () => {
-    const web3      = new Web3("http://127.0.0.1:8545");
-    const voting    = new web3.eth.Contract(votingAbi as any, votingAddress);
-    const accounts  = await web3.eth.getAccounts();
+    const web3     = new Web3("http://127.0.0.1:8545");
+    const voting   = new web3.eth.Contract(votingAbi as any, votingAddress);
+    const accounts = await web3.eth.getAccounts();
     return { voting, adminAccount: accounts[0] };
   };
 
-  // ─── 2. Verify voter (off-chain + on-chain) ───────────
+  // 2) Verify Voter
   const handleVerify = async () => {
-    const roll = rollInput.trim();
-    if (!roll) {
+    if (!rollInput.trim()) {
       showToast("Enter your roll number.", "error");
       return;
     }
 
-    // 2-A) Off-chain lookup in Mongo
-    let voterData: VoterSession;
+    // 2-A) off-chain
+    let v: VoterSession;
     try {
-      const res = await axios.post("/api/verify-voter", { rollNumber: roll });
+      const res = await axios.post("/api/verify-voter", { rollNumber: rollInput });
       if (!res.data.success) {
-        throw new Error(res.data.message || "Off-chain lookup failed");
+        throw new Error(res.data.message);
       }
-      voterData = res.data.voter;
+      v = res.data.voter;
     } catch (err: any) {
       showToast(err?.response?.data?.message || "Verification failed.", "error");
       return;
     }
 
-    // 2-B) On-chain call as ADMIN: pass accountNumber for both params so DID check passes
+    // 2-B) on-chain with the real DID
     const { voting, adminAccount } = await getContract();
     const tx = voting.methods
-      .verifyVoter(
-        voterData.accountNumber,
-        voterData.accountNumber   // ← use the same address as DID
-      )
+      .verifyVoter(v.accountNumber, v.did)
       .send({ from: adminAccount, gas: 200_000 });
 
     showToastPromise(tx, {
@@ -100,12 +94,12 @@ export default function VotingPage() {
       success: "✅ Voter verified!",
       error:   "❌ On-chain verification failed.",
     }).then(() => {
-      setVoter(voterData);
+      setVoter(v);
       setVerified(true);
     });
   };
 
-  // ─── 3. Cast vote ─────────────────────────────────────
+  // 3) Cast vote
   const handleVote = async () => {
     if (!verified || !voter) {
       showToast("You must verify first.", "error");
@@ -128,15 +122,13 @@ export default function VotingPage() {
     }).then(() => router.push("/results"));
   };
 
-  // ─── RENDER ───────────────────────────────────────────
   return (
     <section className="bg-gray-950 text-white min-h-screen">
       <SignHeader/>
-
       <div className="container mx-auto px-4 py-12">
         <h1 className="text-3xl font-bold text-center mb-8">Cast Your Vote</h1>
 
-        {/* Verification box */}
+        {/* Voter Verification */}
         <div className="max-w-md mx-auto bg-gray-800 p-6 rounded-lg mb-8">
           <h2 className="text-xl font-semibold mb-4">Voter Verification</h2>
           {verified && voter ? (
@@ -160,7 +152,7 @@ export default function VotingPage() {
           )}
         </div>
 
-        {/* Candidate cards */}
+        {/* Candidates */}
         <div className="grid md:grid-cols-3 gap-6">
           {candidates.map(c => (
             <div
@@ -180,7 +172,7 @@ export default function VotingPage() {
           ))}
         </div>
 
-        {/* Submit button */}
+        {/* Submit Vote */}
         <div className="flex justify-center mt-8">
           <button
             onClick={handleVote}
