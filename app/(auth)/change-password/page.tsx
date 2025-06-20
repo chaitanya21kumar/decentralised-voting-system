@@ -1,4 +1,5 @@
 "use client";
+
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
@@ -18,10 +19,11 @@ export default function ChangePassword() {
   const debounceTimeout = useRef<NodeJS.Timeout | null>(null);
   const lastStrength = useRef<string>("");
 
+  // Evaluate password strength allowing *any* non-alphanumeric as "special"
   const evaluateStrength = (password: string): "weak" | "medium" | "strong" | "" => {
     if (!password) return "";
-    const strongRegex = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-    const mediumRegex = /^((?=.*[A-Z])(?=.*[a-z])(?=.*\d)|(?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&]))[A-Za-z\d@$!%*?&]{6,}$/;
+    const strongRegex = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+    const mediumRegex = /^(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{6,}$/;
     if (strongRegex.test(password)) return "strong";
     if (mediumRegex.test(password)) return "medium";
     return "weak";
@@ -40,12 +42,13 @@ export default function ChangePassword() {
     }
   };
 
+  // Require at least 8 chars, one uppercase, one lowercase, one digit, one special (non-alphanumeric)
   const validatePassword = (password: string) => {
-    const strongRegex = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-    return strongRegex.test(password);
+    const regex = /^(?=.*[A-Z])(?=.*[a-z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+    return regex.test(password);
   };
 
-  // Debounced password strength evaluation
+  // Debounced strength check
   useEffect(() => {
     if (debounceTimeout.current) clearTimeout(debounceTimeout.current);
     if (!newPassword) {
@@ -53,22 +56,22 @@ export default function ChangePassword() {
       return;
     }
     debounceTimeout.current = setTimeout(() => {
-      const currentStrength = evaluateStrength(newPassword);
-      setStrength(currentStrength);
-
-      if (currentStrength !== lastStrength.current) {
-        lastStrength.current = currentStrength;
-        if (currentStrength === "weak") showToast("Weak password", "error");
-        else if (currentStrength === "medium") showToast("Medium strength password", "error");
-        else if (currentStrength === "strong") showToast("Strong password 💪", "success");
+      const current = evaluateStrength(newPassword);
+      setStrength(current);
+      if (current !== lastStrength.current) {
+        lastStrength.current = current;
+        if (current === "weak") showToast("Weak password", "error");
+        else if (current === "medium") showToast("Medium strength password", "error");
+        else if (current === "strong") showToast("Strong password 💪", "success");
       }
-    }, 300); // 300ms debounce
+    }, 300);
   }, [newPassword]);
 
   const handleChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    const voterId = localStorage.getItem("voterId");
+    setError(""); // clear previous errors
 
+    const voterId = localStorage.getItem("voterId");
     if (!voterId) {
       showToast("No Voter ID found. Please log in again.", "error");
       return;
@@ -89,9 +92,9 @@ export default function ChangePassword() {
       localStorage.removeItem("voterId");
       showToast("Password updated successfully.", "success");
       router.push("/signinusers");
-    } catch (error) {
+    } catch (err) {
       showToast("Error updating password. Please try again.", "error");
-      console.error("Error updating password", error);
+      console.error("Error updating password", err);
     }
   };
 
@@ -103,7 +106,7 @@ export default function ChangePassword() {
       <form onSubmit={handleChange} className="bg-gray-800 p-8 rounded-xl shadow-lg max-w-md w-full">
         <h2 className="text-2xl font-bold mb-6 text-center">Change Your Password</h2>
 
-        {/* New Password Field */}
+        {/* New Password */}
         <div className="relative mb-2">
           <input
             type={showNew ? "text" : "password"}
@@ -127,10 +130,10 @@ export default function ChangePassword() {
 
         {/* Strength Bar */}
         <div className="h-2 bg-gray-700 rounded mb-2 overflow-hidden">
-          <div className={`h-full ${getStrengthColor()} transition-all duration-300`}></div>
+          <div className={`h-full ${getStrengthColor()} transition-all duration-300`} />
         </div>
 
-        {/* Confirm Password Field */}
+        {/* Confirm Password */}
         <div className="relative mb-2">
           <input
             type={showConfirm ? "text" : "password"}
@@ -159,7 +162,6 @@ export default function ChangePassword() {
           </p>
         )}
 
-        {/* Helper Text */}
         <p className="text-sm text-gray-400 mb-3">
           Must be at least 8 characters and include uppercase, lowercase, number, and special character.
         </p>
@@ -167,10 +169,7 @@ export default function ChangePassword() {
         {/* Error Message */}
         {error && <p className="text-red-500 text-sm mb-2">{error}</p>}
 
-        <button
-          type="submit"
-          className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded transition"
-        >
+        <button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded transition">
           Update Password
         </button>
       </form>
