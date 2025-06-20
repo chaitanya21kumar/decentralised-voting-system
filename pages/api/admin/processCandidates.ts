@@ -1,3 +1,4 @@
+
 import type { NextApiRequest, NextApiResponse } from "next";
 import axios from "axios";
 import dbConnect from "../../../lib/mongodb";
@@ -59,12 +60,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       )
       .send({ from: admin , gas: 1000000});
 
-    if(await voting.methods.startElection(3).send({ from: admin, gas: 1000000 })){
-      console.log("Voting started successfully");
-      console.log("start time:", await voting.methods.votingStart().call());
-      console.log("end time:", await voting.methods.votingEnd().call());
-      console.log("Election started successfully");
-    }
+    await voting.methods.startElection(5).send({ from: admin });
 
     for (const candidate of candidates) {
       console.log("Candidate from IPFS:", candidate);
