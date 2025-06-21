@@ -5,10 +5,12 @@ import fs from "fs";
 import pinataSDK from "@pinata/sdk";
 
 // ✅ read keys from environment – never hard-code them
-const pinata = new pinataSDK(
-  process.env.PINATA_API_KEY as string,
-  process.env.PINATA_SECRET_KEY as string,
-);
+// const pinata = new pinataSDK(
+//   process.env.PINATA_API_KEY as string,
+//   process.env.PINATA_SECRET_KEY as string,
+// );
+const pinata = new pinataSDK("90b3ccabe543388210da", "7c3eaed89e56b0ebebd4a793d42a6dfd89626a7469aec2087e863bf2f4103380");
+
 
 export const config = {
   api: { bodyParser: false },     // tell Next.js not to parse multipart

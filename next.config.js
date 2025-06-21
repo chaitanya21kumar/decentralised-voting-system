@@ -8,7 +8,7 @@ const ContentSecurityPolicy = `
   object-src 'none';
   base-uri 'self';
   form-action 'self';
-  report-uri /api/admin/csp-report;
+  report-uri /api/csp-report;
 `;
 
 module.exports = {
