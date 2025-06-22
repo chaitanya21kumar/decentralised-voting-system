@@ -13,8 +13,8 @@ const protectedRoutes = [
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  let response: NextResponse;
 
+    let response: NextResponse | undefined = undefined;
   // 1. Authentication checks & possible redirects
   if (pathname === "/admin_page") {
     const isAdminLoggedIn = request.cookies.get("adminToken")?.value;
