@@ -68,7 +68,7 @@ export default async function handler(
 
       // ── 🔑 THIS IS THE ONLY CHANGE: pass ipfsHash, not rollNumber
       await voting.methods
-        .registerVoter(v.name, v.phoneNumber,v.rollNumber)
+        .registerVoter(v.name, v.phoneNumber, ipfsHash)
         .send({ from: voterAccount, gas: 1_000_000 });
 
       // …save to Mongo and send email as before…
