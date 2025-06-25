@@ -65,10 +65,9 @@ export default async function handler(
       const password     = generatePassword();
       const passwordHash = await bcrypt.hash(password, 10);
       const voterAccount = accounts[i + 1];
-
-      // ── 🔑 THIS IS THE ONLY CHANGE: pass ipfsHash, not rollNumber
+      // ── 🔑 THIS IS THE ONLY CHANGE: pass rollNumber
       await voting.methods
-        .registerVoter(v.name, v.phoneNumber, ipfsHash)
+        .registerVoter(v.name, v.phoneNumber, v.rollNumber)
         .send({ from: voterAccount, gas: 1_000_000 });
 
       // …save to Mongo and send email as before…

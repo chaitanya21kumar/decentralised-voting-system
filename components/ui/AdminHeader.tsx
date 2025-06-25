@@ -9,14 +9,6 @@ export default function AdminHeader() {
   const [loggedIn, setLoggedIn] = useState(false);
   const router = useRouter();
 
-  useEffect(() => {
-    axios
-      .get("/api/admin/me")
-      .then((res) => {
-        setLoggedIn(res.data.authenticated);
-      })
-      .catch(() => setLoggedIn(false));
-  }, []);
 
   const handleLogout = async () => {
     try {

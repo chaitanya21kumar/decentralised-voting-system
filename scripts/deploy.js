@@ -22,7 +22,7 @@ async function main() {
   console.log("Voting deployed to:", address);
 
   // ── 4. Persist the address for the frontend/API
-  const outDir = path.join(__dirname, "..", "frontend", "artifacts");
+  const outDir = path.join(__dirname, "..", "app", "artifacts");
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
   fs.writeFileSync(
     path.join(outDir, "deployedAddress.json"),
