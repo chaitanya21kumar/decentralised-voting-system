@@ -1,17 +1,15 @@
-
-
 [
   {
-    "rollNumber":    "1",
-    "name":          "Ayush ka Dost",
-    "email":         "multiversesyndrome@gmail.com",
-    "phoneNumber":   "9991112224",
+    "rollNumber":    "2",
+    "name":          "Adam",
+    "email":         "pansarearyan19@gmail.com",
+    "phoneNumber":   "1238987998",
     "accountNumber": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
   },
   {
     "rollNumber":    "2",
-    "name":          "Ayush",
-    "email":         "23bcs064@iiitdmj.ac.in",
+    "name":          "Eve",
+    "email":         "23bcs064@gmail.com",
     "phoneNumber":   "9991112221",
     "accountNumber": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC"
   }
