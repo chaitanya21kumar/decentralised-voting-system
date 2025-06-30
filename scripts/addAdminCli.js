@@ -1,6 +1,6 @@
-const connectToDatabase = require('../../../lib/mongodb').default;
+const connectToDatabase = require('../lib/mongodb').default;
 const bcrypt = require('bcryptjs');
-const Admin = require('../../../models/Admin').default;
+const Admin = require('../models/Admin').default;
 
 const email = process.argv[2];
 const plainPassword = process.argv[3];
