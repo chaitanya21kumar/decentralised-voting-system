@@ -40,7 +40,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Step 1: DB + Web3
     await connectToDatabase();
 
-    const web3 = new Web3("http://127.0.0.1:8545");
+    const rpcUrl = process.env.RPC_URL || "http://127.0.0.1:8545";
+    const web3 = new Web3(rpcUrl);
+
     const accounts = await web3.eth.getAccounts();
     if (!accounts || accounts.length < 2) {
       throw new Error("Not enough Ethereum accounts available.");

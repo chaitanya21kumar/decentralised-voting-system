@@ -1,0 +1,36 @@
+services:
+  app:
+    build: .
+    container_name: voting-app
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      - mongo
+      - hardhat
+    env_file:
+      - .env.local
+    command: npm run dev
+
+  mongo:
+    image: mongo
+    container_name: voting-mongo
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  hardhat:
+    image: node:20
+    container_name: voting-hardhat
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: npx hardhat node
+    ports:
+      - "8545:8545"
+
+volumes:
+  mongo-data:
