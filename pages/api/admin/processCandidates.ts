@@ -26,7 +26,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       type: "candidates",
     });
 
-    const web3 = new Web3("http://127.0.0.1:8545");
+    const rpcUrl = process.env.RPC_URL || "http://127.0.0.1:8545";
+    const web3 = new Web3(rpcUrl);
+
     const accounts = await web3.eth.getAccounts();
     const admin = accounts[0];
     console.log("Admin account:", admin);
