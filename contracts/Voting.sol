@@ -13,7 +13,7 @@ contract Voting is ReentrancyGuard {
 
     uint256 public candidateCount;
     uint256 public voterCount;
-
+    uint256 public totalVotesCast;
     uint256 public votingStart;
     uint256 public votingEnd;
     bool public detailsSet;
@@ -221,6 +221,7 @@ contract Voting is ReentrancyGuard {
 
         candidates[_candidateId].votes++;
         hasVoted[msg.sender] = true;
+        totalVotesCast++;
         emit VoteCast(msg.sender, _candidateId);
     }
 
@@ -264,4 +265,10 @@ contract Voting is ReentrancyGuard {
     function getVoter(address _voter) external view returns (Voter memory) {
         return voters[_voter];
     }
+
+    function getVoterTurnout() external view returns (uint256 turnoutPercentage) {
+        if (voterCount == 0) return 0;
+        return (totalVotesCast * 100) / voterCount; 
+    }
+
 }
