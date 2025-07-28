@@ -50,7 +50,7 @@
     "@types/jsonwebtoken": "^9.0.9",
     "@types/nodemailer": "^6.4.17",
     "autoprefixer": "^10.4.16",
-    "dotenv": "^16.5.0",
+    "dotenv": "^16.6.1",
     "hardhat": "^2.24.3",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.3.6",

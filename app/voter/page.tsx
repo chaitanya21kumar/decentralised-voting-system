@@ -55,7 +55,7 @@ export default function VotingPage() {
   useEffect(() => {
     const fetchVoter = async () => {
       try {
-        const res = await axios.get("/api/admin/me");
+        const res = await axios.get("/api/voter/me");
         if (res.data.authenticated) {
           setVoterDetails((prev) => ({
             ...prev,

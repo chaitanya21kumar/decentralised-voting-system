@@ -17,7 +17,7 @@ import {
 } from "chart.js";
 import type { LegendOptions } from "chart.js";
 import { Bar, Pie, Line } from "react-chartjs-2";
-import SignHeader from "@/components/ui/signHeader";
+import AdminHeader from "@/components/ui/AdminHeader";
 import { votingAbi, votingAddress } from "../../artifacts/votingArtifact";
 import { showToast } from "../../../pages/api/admin/showToast";
 import { ElectionControlPanel } from "../../../components/admin/ElectionControlPanel";
@@ -425,7 +425,7 @@ export default function AdminDashboard() {
   if (loading) {
     return (
       <section className="bg-gray-950 text-white min-h-screen">
-        <SignHeader />
+        <AdminHeader />
         <div className="container mx-auto px-4 py-12">
           <div className="flex items-center justify-center py-16">
             <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-indigo-500"></div>
@@ -438,7 +438,7 @@ export default function AdminDashboard() {
 
   return (
     <section className="bg-gray-950 text-white min-h-screen">
-      <SignHeader />
+      <AdminHeader />
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">

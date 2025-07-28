@@ -1,17 +1,17 @@
-// components/AdminHeader.tsx
+// components/VoterHeader.tsx
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import Logo from "./logo";
 
-export default function AdminHeader() {
+export default function VoterHeader() {
   const [loggedIn, setLoggedIn] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
     axios
-      .get("/api/admin/me")
+      .get("/api/voter/me")
       .then((res) => {
         setLoggedIn(res.data.authenticated);
       })
@@ -20,7 +20,7 @@ export default function AdminHeader() {
 
   const handleLogout = async () => {
     try {
-      await axios.post("/api/admin/logout-voter");
+      await axios.post("/api/voter/logout");
       router.push("/");
     } catch (error) {
       console.error("Logout error:", error);

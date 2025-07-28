@@ -29,7 +29,7 @@ export default function SigninUsers() {
     if (hasRun.current) return;
     hasRun.current = true;
     axios
-      .get("/api/admin/me")
+      .get("/api/voter/me")
       .then((res) => {
         if (res.data.authenticated) {
           setSignedIn(true);
