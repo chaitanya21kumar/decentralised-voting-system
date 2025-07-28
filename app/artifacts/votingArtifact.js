@@ -1,5 +1,5 @@
 // app/artifacts/votingArtifact.js
-import Voting from "../../artifacts/contracts/Voting.sol/Voting.json";   // <-- ABI
+import Voting from "../../build/contracts/Voting.json";   // <-- ABI
 import addressJson from "./deployedAddress.json";         // <-- address file
 
 export const votingAbi = Voting.abi;

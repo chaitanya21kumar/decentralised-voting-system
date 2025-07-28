@@ -21,7 +21,7 @@ export default function SignIn() {
     setLoading(true);
 
     try {
-      const response = await axios.post("/api/admin/signin", { email, password });
+      const response = await axios.post("/api/voter/signin", { email, password });
 
       if (response.data.success) {
         if (response.data.mustChangePassword) {
