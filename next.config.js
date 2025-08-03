@@ -1,15 +1,15 @@
 /* next.config.js */
 
-/** Content-Security-Policy (unchanged) */
+/** Content-Security-Policy — now allows JSDelivr for model downloads */
 const ContentSecurityPolicy = `
   default-src 'self';
   script-src 'self';
-  style-src 'self' https://fonts.googleapis.com;
-  img-src 'self' data:;
-  connect-src 'self' https://api.yourdomain.com;
-  font-src https://fonts.gstatic.com;
+  style-src  'self' https://fonts.googleapis.com;
+  img-src    'self' data: https://cdn.jsdelivr.net;
+  connect-src 'self' https://api.yourdomain.com https://cdn.jsdelivr.net;
+  font-src   https://fonts.gstatic.com;
   object-src 'none';
-  base-uri 'self';
+  base-uri   'self';
   form-action 'self';
   report-uri /api/csp-report;
 `.replace(/\n/g, "");
@@ -33,7 +33,7 @@ const nextConfig = {
     ];
   },
 
-  /** Stub Node-only modules so Webpack stops erroring on face-api.js */
+  /** Stub Node-only modules so Webpack doesn’t choke on face-api.js */
   webpack(config) {
     config.resolve.fallback = {
       ...config.resolve.fallback,
