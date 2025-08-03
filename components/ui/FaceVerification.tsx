@@ -10,46 +10,40 @@ interface Props {
 }
 
 export default function FaceVerification({ rollNumber, onVerified }: Props) {
+  /* refs & local state */
   const videoRef = useRef<HTMLVideoElement>(null);
-
   const [modelsReady, setModelsReady] = useState(false);
   const [err, setErr] = useState<string>("");
 
-  /* ───────────────────── 1. load models  ──────────────────── */
+  /* ─────────── 1. download models + open webcam ─────────── */
   useEffect(() => {
     const MODEL_URL = "/models";
 
-
     (async () => {
-      /* A –––––––––––––––––– download weights ––––––––––––––– */
       try {
+        /* 1-A. load weights (tiny variants) */
         await Promise.all([
           faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
           faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-          faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
+          faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL), // ← tiny landmarks
         ]);
-      } catch (e) {
-        console.error("face-api model error", e);
-        setErr("❌ model download failed – check Network tab.");
-        return;
-      }
 
-      /* B –––––––––––––––––– open webcam –––––––––––––––––––– */
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-        });
+        /* 1-B. request camera */
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         if (videoRef.current) videoRef.current.srcObject = stream;
+
         setModelsReady(true);
       } catch (e) {
-        console.error("getUserMedia error", e);
+        console.error(e);
         setErr(
-          "❌ camera permission / availability problem – allow access and reload."
+          e instanceof DOMException
+            ? "❌ camera permission / availability problem – allow access and reload."
+            : "❌ model download failed – check Network tab."
         );
       }
     })();
 
-    /* cleanup on unmount */
+    /* stop camera when component unmounts */
     return () => {
       (videoRef.current?.srcObject as MediaStream | undefined)
         ?.getTracks()
@@ -57,29 +51,27 @@ export default function FaceVerification({ rollNumber, onVerified }: Props) {
     };
   }, []);
 
-  /* ───────────────────── 2. verify button ─────────────────── */
+  /* ─────────── 2. verification handler ─────────── */
   const verify = async () => {
-    if (!videoRef.current) return;
+    if (!modelsReady || !videoRef.current) return;
 
-    /* 2-A. load reference image (optional) */
+    /* 2-A. load stored reference descriptor (if photo exists) */
     let refDescriptor: Float32Array | null = null;
     try {
-      const refImg = await faceapi.fetchImage(
-        `/voter_photos/${rollNumber}.jpg`
-      );
+      const refImg = await faceapi.fetchImage(`/voter_photos/${rollNumber}.jpg`);
       const refDet = await faceapi
         .detectSingleFace(refImg, new faceapi.TinyFaceDetectorOptions())
-        .withFaceLandmarks()
+        .withFaceLandmarks(true)            // tiny net
         .withFaceDescriptor();
       refDescriptor = refDet?.descriptor ?? null;
     } catch {
-      /* no stored image → liveness-only fallback */
+      /* no reference image found – fall back to liveness only */
     }
 
-    /* 2-B. detect live face */
+    /* 2-B. analyse live frame */
     const liveDet = await faceapi
       .detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions())
-      .withFaceLandmarks()
+      .withFaceLandmarks(true)              // tiny net
       .withFaceDescriptor();
 
     if (!liveDet) {
@@ -87,20 +79,16 @@ export default function FaceVerification({ rollNumber, onVerified }: Props) {
       return;
     }
 
-    /* 2-C. compare vs. reference OR accept */
+    /* 2-C. compare or accept */
     if (refDescriptor) {
-      const dist = faceapi.euclideanDistance(
-        refDescriptor,
-        liveDet.descriptor
-      );
-      if (dist < 0.6) onVerified();
-      else setErr("Face does not match reference photo.");
+      const dist = faceapi.euclideanDistance(refDescriptor, liveDet.descriptor);
+      dist < 0.6 ? onVerified() : setErr("Face does not match reference photo.");
     } else {
-      onVerified(); // liveness only
+      onVerified(); // liveness-only mode
     }
   };
 
-  /* ───────────────────── 3. render ────────────────────────── */
+  /* ─────────── 3. UI ─────────── */
   return (
     <div className="flex flex-col items-center">
       <video
