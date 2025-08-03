@@ -2,7 +2,7 @@
 "use client";
 
 import React, { useEffect, useRef, useState } from "react";
-import * as faceapi from "face-api.js";
+import * as faceapi from "face-api.js/dist/face-api.esm.js";
 
 interface Props {
   rollNumber: string;          // NEW: so we can load the reference photo
