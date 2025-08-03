@@ -5,56 +5,79 @@ import React, { useEffect, useRef, useState } from "react";
 import * as faceapi from "face-api.js";
 
 interface Props {
+  rollNumber: string;          // NEW: so we can load the reference photo
   onVerified: () => void;
 }
 
-export default function FaceVerification({ onVerified }: Props) {
+export default function FaceVerification({ rollNumber, onVerified }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [modelsLoaded, setModelsLoaded] = useState(false);
-  const [error, setError] = useState("");
+  const [modelsReady, setModelsReady] = useState(false);
+  const [err, setErr] = useState("");
 
-  // Load models + start camera once
+  /* ── load models + start cam ─────────────────────────────── */
   useEffect(() => {
     const MODEL_URL =
-      "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/"; // ~5 MB total
-
-    const load = async () => {
-      await faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL);
-      setModelsLoaded(true);
-
+      "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/";
+    (async () => {
+      await Promise.all([
+        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+      ]);
+      setModelsReady(true);
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       if (videoRef.current) videoRef.current.srcObject = stream;
-    };
-
-    load().catch(() => setError("🚫 Camera or model load failed."));
-
-    // Cleanup – stop cam on unmount
+    })().catch(() => setErr("🚫 Camera or model load failed."));
     return () => {
-      if (videoRef.current?.srcObject) {
-        (videoRef.current.srcObject as MediaStream)
-          .getTracks()
-          .forEach((t) => t.stop());
-      }
+      (videoRef.current?.srcObject as MediaStream | undefined)
+        ?.getTracks()
+        .forEach((t) => t.stop());
     };
   }, []);
 
-  // Button handler
-  const verifyNow = async () => {
+  /* ── main verify button ──────────────────────────────────── */
+  const verify = async () => {
     if (!videoRef.current) return;
 
-    const detections = await faceapi.detectAllFaces(
-      videoRef.current,
-      new faceapi.TinyFaceDetectorOptions()
-    );
-
-    if (detections.length === 1) {
-      onVerified(); // ✅ success
-    } else {
-      setError(
-        detections.length === 0
-          ? "No face detected – try again."
-          : "Multiple faces detected."
+    /* 1. load reference image (if it exists) */
+    let refDescriptor: Float32Array | null = null;
+    try {
+      const refImg = await faceapi.fetchImage(
+        `/voter_photos/${rollNumber}.jpg`
       );
+      const refDet = await faceapi
+        .detectSingleFace(refImg, new faceapi.TinyFaceDetectorOptions())
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+      refDescriptor = refDet?.descriptor || null;
+    } catch {
+      // ignore — we’ll fall back to liveness only
+    }
+
+    /* 2. detect live face */
+    const liveDet = await faceapi
+      .detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions())
+      .withFaceLandmarks()
+      .withFaceDescriptor();
+
+    if (!liveDet) {
+      setErr("No face detected – try again.");
+      return;
+    }
+
+    /* 3. compare or accept */
+    if (refDescriptor) {
+      const dist = faceapi.euclideanDistance(
+        refDescriptor,
+        liveDet.descriptor
+      );
+      if (dist < 0.6) {
+        onVerified(); // ✅ match
+      } else {
+        setErr("Face does not match reference photo.");
+      }
+    } else {
+      // fallback to liveness-only
+      onVerified();
     }
   };
 
@@ -63,19 +86,19 @@ export default function FaceVerification({ onVerified }: Props) {
       <video
         ref={videoRef}
         autoPlay
-        playsInline
         muted
+        playsInline
         width={320}
         height={240}
         className="rounded border border-gray-600 mb-4"
       />
-      {error && <p className="text-red-400 mb-2">{error}</p>}
+      {err && <p className="text-red-400 mb-2">{err}</p>}
       <button
-        disabled={!modelsLoaded}
-        onClick={verifyNow}
+        onClick={verify}
+        disabled={!modelsReady}
         className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded disabled:opacity-50"
       >
-        {modelsLoaded ? "Verify Face" : "Loading models…"}
+        {modelsReady ? "Verify Face" : "Loading models…"}
       </button>
     </div>
   );

@@ -11,6 +11,7 @@ import SignHeader from "@/components/ui/signHeader";
 import { showToast, showToastPromise } from "../../pages/api/admin/showToast";
 import { votingAbi, votingAddress } from "../artifacts/votingArtifact";
 
+/* ───── lazy-load webcam component ───── */
 const FaceVerification = dynamic(
   () => import("@/components/ui/FaceVerification"),
   { ssr: false }
@@ -26,7 +27,7 @@ interface Candidate {
 export default function VotingPage() {
   const router = useRouter();
 
-  /* ───────────────────────────── state ───────────────────────────── */
+  /* ──────────── state ──────────── */
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [voterDetails, setVoterDetails] = useState({
     rollNumber: "",
@@ -35,12 +36,12 @@ export default function VotingPage() {
     phoneNumber: "",
   });
 
-  const [faceVerified, setFaceVerified] = useState(false); // 👈 NEW
+  const [faceVerified, setFaceVerified] = useState(false);
   const [blockchainVerified, setBlockchainVerified] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
   const fetchedOnce = useRef(false);
 
-  /* ─────────────────────────── helpers ──────────────────────────── */
+  /* ───────── helpers ───────── */
   const getContract = async () => {
     const web3 = new Web3("http://127.0.0.1:8545");
     const voting = new web3.eth.Contract(votingAbi as any, votingAddress);
@@ -48,7 +49,7 @@ export default function VotingPage() {
     return { voting, adminAccount: accounts[0] };
   };
 
-  /* ─────────────────────── load candidates ──────────────────────── */
+  /* ───── load candidates once ───── */
   useEffect(() => {
     if (fetchedOnce.current) return;
     fetchedOnce.current = true;
@@ -70,7 +71,7 @@ export default function VotingPage() {
       .catch(() => showToast("Error loading candidates", "error"));
   }, []);
 
-  /* ──────────────────── load voter session ──────────────────────── */
+  /* ───── load voter session ───── */
   useEffect(() => {
     (async () => {
       try {
@@ -89,7 +90,7 @@ export default function VotingPage() {
     })();
   }, []);
 
-  /* ─────────────────────── blockchain verify ────────────────────── */
+  /* ───── on-chain verify ───── */
   const handleVerifyOnChain = async () => {
     if (!faceVerified) {
       showToast("Complete face verification first.", "error");
@@ -117,7 +118,7 @@ export default function VotingPage() {
     });
   };
 
-  /* ─────────────────────────── vote ─────────────────────────────── */
+  /* ───── vote handler ───── */
   const handleVote = async () => {
     if (!blockchainVerified || selected === null) {
       showToast("Verify & select a candidate first.", "error");
@@ -136,7 +137,7 @@ export default function VotingPage() {
     }).then(() => router.push("/results"));
   };
 
-  /* ─────────────────────────── UI ──────────────────────────────── */
+  /* ──────────── UI ──────────── */
   return (
     <section className="bg-gray-950 text-white min-h-screen">
       <SignHeader />
@@ -144,49 +145,57 @@ export default function VotingPage() {
       <div className="container mx-auto px-4 py-12">
         <h1 className="text-3xl font-bold text-center mb-8">Cast Your Vote</h1>
 
-        {/* ── Face check ─────────────────────────────────────────── */}
+        {/* ── Step 1 : roll # + face ───────────────────────────── */}
         {!faceVerified && (
           <div className="max-w-md mx-auto bg-gray-800 p-6 rounded-lg mb-8">
-            <h2 className="text-xl font-semibold mb-4">Step 1: Face Verification</h2>
-            <FaceVerification onVerified={() => setFaceVerified(true)} />
+            <h2 className="text-xl font-semibold mb-4">
+              Step 1 : Roll&nbsp;Number + Face Check
+            </h2>
+
+            {/* roll number input */}
+            <input
+              type="text"
+              value={voterDetails.rollNumber}
+              onChange={(e) =>
+                setVoterDetails((p) => ({ ...p, rollNumber: e.target.value }))
+              }
+              placeholder="Enter Roll Number"
+              className="w-full mb-4 p-2 bg-gray-700 rounded"
+            />
+
+            {/* webcam appears only after roll # entered */}
+            {voterDetails.rollNumber.trim() && (
+              <FaceVerification
+                rollNumber={voterDetails.rollNumber.trim()}
+                onVerified={() => setFaceVerified(true)}
+              />
+            )}
           </div>
         )}
 
-        {/* ── Voter on-chain verification ─────────────────────────── */}
+        {/* ── Step 2 : on-chain verify ─────────────────────────── */}
         {faceVerified && (
           <div className="max-w-md mx-auto bg-gray-800 p-6 rounded-lg mb-8">
-            <h2 className="text-xl font-semibold mb-4">Step 2: Verify Voter</h2>
+            <h2 className="text-xl font-semibold mb-4">
+              Step 2 : Verify on Blockchain
+            </h2>
 
             {blockchainVerified ? (
               <p className="text-green-400">
                 ✅ Hello {voterDetails.name}, you’re verified!
               </p>
             ) : (
-              <>
-                <input
-                  type="text"
-                  value={voterDetails.rollNumber}
-                  onChange={(e) =>
-                    setVoterDetails((prev) => ({
-                      ...prev,
-                      rollNumber: e.target.value,
-                    }))
-                  }
-                  placeholder="Enter Roll Number"
-                  className="w-full mb-4 p-2 bg-gray-700 rounded"
-                />
-                <button
-                  onClick={handleVerifyOnChain}
-                  className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded"
-                >
-                  Verify Voter
-                </button>
-              </>
+              <button
+                onClick={handleVerifyOnChain}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded"
+              >
+                Verify Voter
+              </button>
             )}
           </div>
         )}
 
-        {/* ── Candidates ────────────────────────────────────────── */}
+        {/* ── Candidates ─────────────────────────────────────── */}
         <div className="grid md:grid-cols-3 gap-6">
           {candidates.map((c) => (
             <div
@@ -212,7 +221,7 @@ export default function VotingPage() {
           ))}
         </div>
 
-        {/* ── Submit ────────────────────────────────────────────── */}
+        {/* ── Submit Vote ─────────────────────────────────────── */}
         <div className="flex justify-center mt-8">
           <button
             onClick={handleVote}
