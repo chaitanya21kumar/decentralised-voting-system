@@ -18,6 +18,11 @@ contract Voting is ReentrancyGuard {
     uint256 public votingEnd;
     bool public detailsSet;
 
+    /* NEW ⬇⬇⬇ --------------------------------------------- */
+    /// @dev If the caller passes 0 for duration, this value is used.
+    uint256 public constant DEFAULT_VOTING_DURATION = 10 minutes;
+    /* ------------------------------------------------------ */
+
     struct Candidate {
         uint256 id;
         string name;
@@ -146,13 +151,18 @@ contract Voting is ReentrancyGuard {
     }
 
     /// @notice Starts the election period
-    /// @param durationMinutes Duration in minutes
+    /// @param durationMinutes Duration in minutes (pass 0 to use default 10 min)
     function startElection(uint256 durationMinutes) external onlyAdmin notPaused {
         require(detailsSet, "Details not set");
         require(votingStart == 0 || block.timestamp > votingEnd, "Ongoing election");
 
+        /* NEW logic: 0 means "use default duration" */
+        uint256 duration = durationMinutes > 0
+            ? durationMinutes * 1 minutes
+            : DEFAULT_VOTING_DURATION;
+
         votingStart = block.timestamp;
-        votingEnd = votingStart + durationMinutes * 1 minutes;
+        votingEnd = votingStart + duration;
         emit ElectionStarted(votingStart, votingEnd);
     }
 
