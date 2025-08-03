@@ -5,27 +5,51 @@ import React, { useEffect, useRef, useState } from "react";
 import * as faceapi from "face-api.js/build/es6/index.js";
 
 interface Props {
-  rollNumber: string;          // NEW: so we can load the reference photo
+  rollNumber: string;
   onVerified: () => void;
 }
 
 export default function FaceVerification({ rollNumber, onVerified }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [modelsReady, setModelsReady] = useState(false);
-  const [err, setErr] = useState("");
 
-  /* ── load models + start cam ─────────────────────────────── */
+  const [modelsReady, setModelsReady] = useState(false);
+  const [err, setErr] = useState<string>("");
+
+  /* ───────────────────── 1. load models  ──────────────────── */
   useEffect(() => {
     const MODEL_URL = "/models";
+
+
     (async () => {
-      await Promise.all([
-        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-        faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-      ]);
-      setModelsReady(true);
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      if (videoRef.current) videoRef.current.srcObject = stream;
-    })().catch(() => setErr("🚫 Camera or model load failed."));
+      /* A –––––––––––––––––– download weights ––––––––––––––– */
+      try {
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+          faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+          faceapi.nets.faceLandmark68TinyNet.loadFromUri(MODEL_URL),
+        ]);
+      } catch (e) {
+        console.error("face-api model error", e);
+        setErr("❌ model download failed – check Network tab.");
+        return;
+      }
+
+      /* B –––––––––––––––––– open webcam –––––––––––––––––––– */
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+        });
+        if (videoRef.current) videoRef.current.srcObject = stream;
+        setModelsReady(true);
+      } catch (e) {
+        console.error("getUserMedia error", e);
+        setErr(
+          "❌ camera permission / availability problem – allow access and reload."
+        );
+      }
+    })();
+
+    /* cleanup on unmount */
     return () => {
       (videoRef.current?.srcObject as MediaStream | undefined)
         ?.getTracks()
@@ -33,11 +57,11 @@ export default function FaceVerification({ rollNumber, onVerified }: Props) {
     };
   }, []);
 
-  /* ── main verify button ──────────────────────────────────── */
+  /* ───────────────────── 2. verify button ─────────────────── */
   const verify = async () => {
     if (!videoRef.current) return;
 
-    /* 1. load reference image (if it exists) */
+    /* 2-A. load reference image (optional) */
     let refDescriptor: Float32Array | null = null;
     try {
       const refImg = await faceapi.fetchImage(
@@ -47,12 +71,12 @@ export default function FaceVerification({ rollNumber, onVerified }: Props) {
         .detectSingleFace(refImg, new faceapi.TinyFaceDetectorOptions())
         .withFaceLandmarks()
         .withFaceDescriptor();
-      refDescriptor = refDet?.descriptor || null;
+      refDescriptor = refDet?.descriptor ?? null;
     } catch {
-      // ignore — we’ll fall back to liveness only
+      /* no stored image → liveness-only fallback */
     }
 
-    /* 2. detect live face */
+    /* 2-B. detect live face */
     const liveDet = await faceapi
       .detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions())
       .withFaceLandmarks()
@@ -63,23 +87,20 @@ export default function FaceVerification({ rollNumber, onVerified }: Props) {
       return;
     }
 
-    /* 3. compare or accept */
+    /* 2-C. compare vs. reference OR accept */
     if (refDescriptor) {
       const dist = faceapi.euclideanDistance(
         refDescriptor,
         liveDet.descriptor
       );
-      if (dist < 0.6) {
-        onVerified(); // ✅ match
-      } else {
-        setErr("Face does not match reference photo.");
-      }
+      if (dist < 0.6) onVerified();
+      else setErr("Face does not match reference photo.");
     } else {
-      // fallback to liveness-only
-      onVerified();
+      onVerified(); // liveness only
     }
   };
 
+  /* ───────────────────── 3. render ────────────────────────── */
   return (
     <div className="flex flex-col items-center">
       <video
@@ -92,6 +113,7 @@ export default function FaceVerification({ rollNumber, onVerified }: Props) {
         className="rounded border border-gray-600 mb-4"
       />
       {err && <p className="text-red-400 mb-2">{err}</p>}
+
       <button
         onClick={verify}
         disabled={!modelsReady}
