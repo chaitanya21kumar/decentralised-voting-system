@@ -16,8 +16,7 @@ export default function FaceVerification({ rollNumber, onVerified }: Props) {
 
   /* ── load models + start cam ─────────────────────────────── */
   useEffect(() => {
-    const MODEL_URL =
-      "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/";
+    const MODEL_URL = "/models";
     (async () => {
       await Promise.all([
         faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
