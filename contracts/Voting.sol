@@ -80,21 +80,27 @@ contract Voting is ReentrancyGuard {
         _;
     }
 
+    /// @dev Automatically ends election if time expired
     modifier onlyWhenVotingActive() {
         if (votingEnd != 0 && block.timestamp > votingEnd) {
             _endElectionInternal();
         }
-        require(block.timestamp >= votingStart && block.timestamp <= votingEnd, "Voting not active");
+        require(
+            votingStart != 0 &&
+            block.timestamp >= votingStart &&
+            block.timestamp <= votingEnd,
+            "Voting not active"
+        );
         _;
     }
 
+    /// @dev Requires election period to be over
     modifier onlyWhenVotingEnded() {
         require(votingEnd != 0 && block.timestamp > votingEnd, "Voting not ended");
         _;
     }
 
     // --- Constructor ---
-    /// @param _didRegistryCID IPFS CID for DID registry
     constructor(string memory _didRegistryCID) {
         superAdmin = msg.sender;
         admins[msg.sender] = true;
@@ -121,7 +127,6 @@ contract Voting is ReentrancyGuard {
     }
 
     // --- Election Setup ---
-    /// @notice Sets up election parameters before starting
     function setElectionDetails(
         string memory _adminName,
         string memory _adminEmail,
@@ -145,8 +150,6 @@ contract Voting is ReentrancyGuard {
         emit ElectionDetailsSet(_electionTitle, _maxVotes);
     }
 
-    /// @notice Starts the election period
-    /// @param durationMinutes Duration in minutes
     function startElection(uint256 durationMinutes) external onlyAdmin notPaused {
         require(detailsSet, "Details not set");
         require(votingStart == 0 || block.timestamp > votingEnd, "Ongoing election");
@@ -156,13 +159,12 @@ contract Voting is ReentrancyGuard {
         emit ElectionStarted(votingStart, votingEnd);
     }
 
-    /// @notice Manually ends election if needed
     function endElection() external onlyAdmin notPaused onlyWhenVotingEnded {
         _endElectionInternal();
     }
 
-    // --- Internal ---
     function _endElectionInternal() internal {
+        // Clear start and end to avoid state leakage between elections
         votingStart = 0;
         votingEnd = 0;
         emit ElectionEnded(block.timestamp);
@@ -245,6 +247,7 @@ contract Voting is ReentrancyGuard {
                 idx = i;
             }
         }
+
         winnerId = idx;
         winnerName = candidates[idx].name;
         maxVotes = highest;
@@ -268,7 +271,6 @@ contract Voting is ReentrancyGuard {
 
     function getVoterTurnout() external view returns (uint256 turnoutPercentage) {
         if (voterCount == 0) return 0;
-        return (totalVotesCast * 100) / voterCount; 
+        return (totalVotesCast * 100) / voterCount;
     }
-
 }
