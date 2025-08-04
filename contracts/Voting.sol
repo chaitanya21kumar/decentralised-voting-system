@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 /// @title Decentralized Voting Contract
 /// @notice Manages elections: candidate registration, voter registration, voting, and winner declaration
 contract Voting is ReentrancyGuard {
-    // --- State Variables ---
+    // ────────────────────────── State ──────────────────────────
     address public superAdmin;
     bool public isPaused;
     string public didRegistryCID;
@@ -18,10 +18,8 @@ contract Voting is ReentrancyGuard {
     uint256 public votingEnd;
     bool public detailsSet;
 
-    /* NEW ⬇⬇⬇ --------------------------------------------- */
-    /// @dev If the caller passes 0 for duration, this value is used.
-    uint256 public constant DEFAULT_VOTING_DURATION = 10 minutes;
-    /* ------------------------------------------------------ */
+    /// @dev Every election runs exactly 10 minutes (600 s)
+    uint256 public constant VOTING_DURATION = 10 minutes;
 
     struct Candidate {
         uint256 id;
@@ -55,7 +53,7 @@ contract Voting is ReentrancyGuard {
     mapping(bytes32 => bool) private candidateNameExists;
     mapping(address => bool) private hasVoted;
 
-    // --- Events ---
+    // ────────────────────────── Events ─────────────────────────
     event DIDRegistryUpdated(string cid);
     event AdminAdded(address indexed admin);
     event AdminRemoved(address indexed admin);
@@ -69,7 +67,7 @@ contract Voting is ReentrancyGuard {
     event WinnerDeclared(uint256 indexed candidateId, string name, uint256 votes);
     event ContractPaused(bool paused);
 
-    // --- Modifiers ---
+    // ────────────────────────── Modifiers ──────────────────────
     modifier onlySuperAdmin() {
         require(msg.sender == superAdmin, "Only super admin");
         _;
@@ -89,7 +87,10 @@ contract Voting is ReentrancyGuard {
         if (votingEnd != 0 && block.timestamp > votingEnd) {
             _endElectionInternal();
         }
-        require(block.timestamp >= votingStart && block.timestamp <= votingEnd, "Voting not active");
+        require(
+            block.timestamp >= votingStart && block.timestamp <= votingEnd,
+            "Voting not active"
+        );
         _;
     }
 
@@ -98,8 +99,7 @@ contract Voting is ReentrancyGuard {
         _;
     }
 
-    // --- Constructor ---
-    /// @param _didRegistryCID IPFS CID for DID registry
+    // ───────────────────────── Constructor ─────────────────────
     constructor(string memory _didRegistryCID) {
         superAdmin = msg.sender;
         admins[msg.sender] = true;
@@ -107,7 +107,7 @@ contract Voting is ReentrancyGuard {
         emit DIDRegistryUpdated(_didRegistryCID);
     }
 
-    // --- Admin Functions ---
+    // ─────────────────── Admin / Setup Logic ───────────────────
     function updateDIDRegistry(string memory _cid) external onlySuperAdmin {
         didRegistryCID = _cid;
         emit DIDRegistryUpdated(_cid);
@@ -125,8 +125,7 @@ contract Voting is ReentrancyGuard {
         emit AdminRemoved(_admin);
     }
 
-    // --- Election Setup ---
-    /// @notice Sets up election parameters before starting
+    /// @notice Configure election parameters before start
     function setElectionDetails(
         string memory _adminName,
         string memory _adminEmail,
@@ -150,36 +149,34 @@ contract Voting is ReentrancyGuard {
         emit ElectionDetailsSet(_electionTitle, _maxVotes);
     }
 
-    /// @notice Starts the election period
-    /// @param durationMinutes Duration in minutes (pass 0 to use default 10 min)
-    function startElection(uint256 durationMinutes) external onlyAdmin notPaused {
+    /// @notice Starts a fixed-length (10 min) election
+    function startElection() external onlyAdmin notPaused {
         require(detailsSet, "Details not set");
         require(votingStart == 0 || block.timestamp > votingEnd, "Ongoing election");
 
-        /* NEW logic: 0 means "use default duration" */
-        uint256 duration = durationMinutes > 0
-            ? durationMinutes * 1 minutes
-            : DEFAULT_VOTING_DURATION;
-
         votingStart = block.timestamp;
-        votingEnd = votingStart + duration;
+        votingEnd   = votingStart + VOTING_DURATION;   // ← exactly 10 minutes
         emit ElectionStarted(votingStart, votingEnd);
     }
 
-    /// @notice Manually ends election if needed
+    /// @notice Manually ends election after the period lapses
     function endElection() external onlyAdmin notPaused onlyWhenVotingEnded {
         _endElectionInternal();
     }
 
-    // --- Internal ---
+    // ──────────────────── Internal helpers ─────────────────────
     function _endElectionInternal() internal {
         votingStart = 0;
-        votingEnd = 0;
+        votingEnd   = 0;
         emit ElectionEnded(block.timestamp);
     }
 
-    // --- Candidate Management ---
-    function addCandidate(string memory _name, string memory _slogan) external onlyAdmin notPaused {
+    // ───────────── Candidate & Voter Management ────────────────
+    function addCandidate(string memory _name, string memory _slogan)
+        external
+        onlyAdmin
+        notPaused
+    {
         require(bytes(_name).length > 0, "Name required");
         bytes32 hash = keccak256(abi.encodePacked(_name));
         require(!candidateNameExists[hash], "Duplicate candidate");
@@ -190,7 +187,6 @@ contract Voting is ReentrancyGuard {
         candidateCount++;
     }
 
-    // --- Voter Management ---
     function registerVoter(
         string memory _name,
         string memory _phone,
@@ -203,10 +199,15 @@ contract Voting is ReentrancyGuard {
         emit VoterRegistered(msg.sender, _name);
     }
 
-    function verifyVoter(address _voter, string memory _did) external onlyAdmin notPaused {
+    function verifyVoter(address _voter, string memory _did)
+        external
+        onlyAdmin
+        notPaused
+    {
         require(voters[_voter].isRegistered, "Not registered");
         require(
-            keccak256(abi.encodePacked(voters[_voter].did)) == keccak256(abi.encodePacked(_did)),
+            keccak256(abi.encodePacked(voters[_voter].did)) ==
+                keccak256(abi.encodePacked(_did)),
             "DID mismatch"
         );
 
@@ -214,7 +215,7 @@ contract Voting is ReentrancyGuard {
         emit VoterVerified(_voter);
     }
 
-    // --- Voting ---
+    // ───────────────────── Voting Logic ────────────────────────
     function vote(uint256 _candidateId)
         external
         onlyWhenVotingActive
@@ -234,7 +235,7 @@ contract Voting is ReentrancyGuard {
         emit VoteCast(msg.sender, _candidateId);
     }
 
-    // --- Results ---
+    // ─────────────────── Results & Winner ──────────────────────
     function declareWinner()
         external
         onlyAdmin
@@ -260,13 +261,13 @@ contract Voting is ReentrancyGuard {
         emit WinnerDeclared(winnerId, winnerName, maxVotes);
     }
 
-    // --- Pause ---
+    // ───────────────────── Pause switch ────────────────────────
     function pauseContract(bool _pause) external onlySuperAdmin {
         isPaused = _pause;
         emit ContractPaused(_pause);
     }
 
-    // --- Helpers ---
+    // ───────────────────── Read-only helpers ───────────────────
     function getCandidateCount() external view returns (uint256) {
         return candidateCount;
     }
