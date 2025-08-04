@@ -164,8 +164,9 @@ contract Voting is ReentrancyGuard {
     }
 
     function _endElectionInternal() internal {
-        // Only clear start; keep votingEnd for end-condition checks
+        // Clear start and end to avoid state leakage between elections
         votingStart = 0;
+        votingEnd = 0;
         emit ElectionEnded(block.timestamp);
     }
 
@@ -238,7 +239,7 @@ contract Voting is ReentrancyGuard {
             uint256 maxVotes
         )
     {
-        uint256 highest;
+        uint256 highest = 0;
         uint256 idx;
         for (uint256 i = 0; i < candidateCount; i++) {
             if (candidates[i].votes > highest) {
