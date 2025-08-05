@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 /// @title Decentralized Voting Contract
 /// @notice Manages elections: candidate registration, voter registration, voting, and winner declaration
 contract Voting is ReentrancyGuard {
-    // --- State Variables ---
+    // ────────────────────────── State ──────────────────────────
     address public superAdmin;
     bool public isPaused;
     string public didRegistryCID;
@@ -17,6 +17,17 @@ contract Voting is ReentrancyGuard {
     uint256 public votingStart;
     uint256 public votingEnd;
     bool public detailsSet;
+
+
+    // Tracks current leader to avoid unbounded loops in declareWinner
+    uint256 public leadingCandidate;
+    uint256 public highestVotes;
+
+    // For resetElection: keep track of all candidate names and who voted
+    bytes32[] private candidateHashes;
+    address[] private votedVoters;
+    address[] private registeredVoters;
+
 
     struct Candidate {
         uint256 id;
@@ -50,7 +61,7 @@ contract Voting is ReentrancyGuard {
     mapping(bytes32 => bool) private candidateNameExists;
     mapping(address => bool) private hasVoted;
 
-    // --- Events ---
+    // ────────────────────────── Events ─────────────────────────
     event DIDRegistryUpdated(string cid);
     event AdminAdded(address indexed admin);
     event AdminRemoved(address indexed admin);
@@ -63,8 +74,9 @@ contract Voting is ReentrancyGuard {
     event VoteCast(address indexed voter, uint256 indexed candidateId);
     event WinnerDeclared(uint256 indexed candidateId, string name, uint256 votes);
     event ContractPaused(bool paused);
+    event ElectionReset();
 
-    // --- Modifiers ---
+    // ────────────────────────── Modifiers ──────────────────────
     modifier onlySuperAdmin() {
         require(msg.sender == superAdmin, "Only super admin");
         _;
@@ -82,9 +94,12 @@ contract Voting is ReentrancyGuard {
 
     modifier onlyWhenVotingActive() {
         if (votingEnd != 0 && block.timestamp > votingEnd) {
-            _endElectionInternal();
+            endElection();
         }
-        require(block.timestamp >= votingStart && block.timestamp <= votingEnd, "Voting not active");
+        require(
+            block.timestamp >= votingStart && block.timestamp <= votingEnd,
+            "Voting not active"
+        );
         _;
     }
 
@@ -93,8 +108,7 @@ contract Voting is ReentrancyGuard {
         _;
     }
 
-    // --- Constructor ---
-    /// @param _didRegistryCID IPFS CID for DID registry
+    // ───────────────────────── Constructor ─────────────────────
     constructor(string memory _didRegistryCID) {
         superAdmin = msg.sender;
         admins[msg.sender] = true;
@@ -102,7 +116,7 @@ contract Voting is ReentrancyGuard {
         emit DIDRegistryUpdated(_didRegistryCID);
     }
 
-    // --- Admin Functions ---
+    // ─────────────────── Admin / Setup Logic ───────────────────
     function updateDIDRegistry(string memory _cid) external onlySuperAdmin {
         didRegistryCID = _cid;
         emit DIDRegistryUpdated(_cid);
@@ -120,8 +134,50 @@ contract Voting is ReentrancyGuard {
         emit AdminRemoved(_admin);
     }
 
+        /// @notice Resets all per-election state so you can run another election
+    function resetElection() external onlyAdmin notPaused {
+        require(votingStart == 0, "Election must be ended");
+        votingStart = 0;
+        votingEnd   = 0;
+
+        // Clear candidates and name registry
+        for (uint256 i = 0; i < candidateCount; i++) {
+            delete candidates[i];
+        }
+        for (uint256 i = 0; i < candidateHashes.length; i++) {
+            candidateNameExists[candidateHashes[i]] = false;
+        }
+        delete candidateHashes;
+        candidateCount = 0;
+
+        // Clear vote state
+        for (uint256 i = 0; i < votedVoters.length; i++) {
+            hasVoted[votedVoters[i]] = false;
+        }
+
+        // Clear voter registry
+        for (uint i = 0; i < registeredVoters.length; i++) {
+            delete voters[registeredVoters[i]];
+        }
+        delete registeredVoters;
+        voterCount = 0;
+        delete votedVoters;
+        totalVotesCast = 0;
+
+        // Clear election details
+        detailsSet = false;
+        delete election;
+
+        // Reset leader tracking
+        leadingCandidate = 0;
+        highestVotes     = 0;
+
+        emit ElectionReset();
+    }
+
+
     // --- Election Setup ---
-    /// @notice Sets up election parameters before starting
+
     function setElectionDetails(
         string memory _adminName,
         string memory _adminEmail,
@@ -145,58 +201,48 @@ contract Voting is ReentrancyGuard {
         emit ElectionDetailsSet(_electionTitle, _maxVotes);
     }
 
+
     /// @notice Starts the election period
-    /// @param durationMinutes Duration in minutes
+    /// @param durationMinutes Duration in minutes (must be > 0)
     function startElection(uint256 durationMinutes) external onlyAdmin notPaused {
+
         require(detailsSet, "Details not set");
+        require(durationMinutes > 0, "Must be > 0");
         require(votingStart == 0 || block.timestamp > votingEnd, "Ongoing election");
 
         votingStart = block.timestamp;
-        votingEnd = votingStart + durationMinutes * 1 minutes;
+        votingEnd   = votingStart + VOTING_DURATION;   // ← exactly 10 minutes
         emit ElectionStarted(votingStart, votingEnd);
     }
 
-    /// @notice Manually ends election if needed
-    function endElection() external onlyAdmin notPaused onlyWhenVotingEnded {
-        _endElectionInternal();
-    }
 
-    // --- Internal ---
-    function _endElectionInternal() internal {
-        votingStart = 0;
-        votingEnd = 0;
-        emit ElectionEnded(block.timestamp);
-    }
+    // --- Registration & Candidates ---
 
-    // --- Candidate Management ---
-    function addCandidate(string memory _name, string memory _slogan) external onlyAdmin notPaused {
-        require(bytes(_name).length > 0, "Name required");
-        bytes32 hash = keccak256(abi.encodePacked(_name));
-        require(!candidateNameExists[hash], "Duplicate candidate");
+    /// @notice Registers a voter—only *before* the election starts
 
-        candidates[candidateCount] = Candidate(candidateCount, _name, _slogan, 0);
-        candidateNameExists[hash] = true;
-        emit CandidateAdded(candidateCount, _name);
-        candidateCount++;
-    }
-
-    // --- Voter Management ---
     function registerVoter(
         string memory _name,
         string memory _phone,
         string memory _did
     ) external notPaused {
+        require(votingStart == 0, "Registration closed");
         require(!voters[msg.sender].isRegistered, "Already registered");
 
         voters[msg.sender] = Voter(msg.sender, _name, _phone, _did, false, true);
         voterCount++;
+        registeredVoters.push(msg.sender);
         emit VoterRegistered(msg.sender, _name);
     }
 
-    function verifyVoter(address _voter, string memory _did) external onlyAdmin notPaused {
+    function verifyVoter(address _voter, string memory _did)
+        external
+        onlyAdmin
+        notPaused
+    {
         require(voters[_voter].isRegistered, "Not registered");
         require(
-            keccak256(abi.encodePacked(voters[_voter].did)) == keccak256(abi.encodePacked(_did)),
+            keccak256(abi.encodePacked(voters[_voter].did)) ==
+                keccak256(abi.encodePacked(_did)),
             "DID mismatch"
         );
 
@@ -204,7 +250,21 @@ contract Voting is ReentrancyGuard {
         emit VoterVerified(_voter);
     }
 
+
+    function addCandidate(string memory _name, string memory _slogan) external onlyAdmin notPaused {
+        require(bytes(_name).length > 0, "Name required");
+        bytes32 hash = keccak256(abi.encodePacked(_name));
+        require(!candidateNameExists[hash], "Duplicate candidate");
+
+        candidates[candidateCount] = Candidate(candidateCount, _name, _slogan, 0);
+        candidateNameExists[hash] = true;
+        candidateHashes.push(hash);
+        emit CandidateAdded(candidateCount, _name);
+        candidateCount++;
+    }
+
     // --- Voting ---
+
     function vote(uint256 _candidateId)
         external
         onlyWhenVotingActive
@@ -219,12 +279,29 @@ contract Voting is ReentrancyGuard {
             "Vote limit reached"
         );
 
+        // Cast the vote
         candidates[_candidateId].votes++;
         hasVoted[msg.sender] = true;
+
+        votedVoters.push(msg.sender);
+        totalVotesCast++;
+
         emit VoteCast(msg.sender, _candidateId);
+
+        // Update leader incrementally (avoids gas‐heavy loops)
+        if (candidates[_candidateId].votes > highestVotes) {
+            highestVotes = candidates[_candidateId].votes;
+            leadingCandidate = _candidateId;
+        }
     }
 
-    // --- Results ---
+    // --- Election Conclusion ---
+    function endElection() public onlyAdmin notPaused onlyWhenVotingEnded {
+        votingStart = 0;
+        emit ElectionEnded(block.timestamp);
+    }
+
+    // ─────────────────── Results & Winner ──────────────────────
     function declareWinner()
         external
         onlyAdmin
@@ -236,27 +313,21 @@ contract Voting is ReentrancyGuard {
             uint256 maxVotes
         )
     {
-        uint256 highest = 0;
-        uint256 idx;
-        for (uint256 i = 0; i < candidateCount; i++) {
-            if (candidates[i].votes > highest) {
-                highest = candidates[i].votes;
-                idx = i;
-            }
-        }
-        winnerId = idx;
-        winnerName = candidates[idx].name;
-        maxVotes = highest;
+
+        winnerId  = leadingCandidate;
+        winnerName = candidates[leadingCandidate].name;
+        maxVotes  = highestVotes;
+
         emit WinnerDeclared(winnerId, winnerName, maxVotes);
     }
 
-    // --- Pause ---
+    // ───────────────────── Pause switch ────────────────────────
     function pauseContract(bool _pause) external onlySuperAdmin {
         isPaused = _pause;
         emit ContractPaused(_pause);
     }
 
-    // --- Helpers ---
+    // ───────────────────── Read-only helpers ───────────────────
     function getCandidateCount() external view returns (uint256) {
         return candidateCount;
     }

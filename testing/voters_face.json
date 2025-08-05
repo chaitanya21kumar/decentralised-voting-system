@@ -1,0 +1,18 @@
+[
+  {
+    "rollNumber": "1",
+    "name": "Chaitanya Kumar",
+    "email": "multiversesyndrome@gmail.com",
+    "phoneNumber": "9991112224",
+    "accountNumber": "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+    "photo": "1.jpg"
+  },
+  {
+    "rollNumber": "2",
+    "name": "Abhinav Harsh",
+    "email": "23bcs006@iiitdmj.ac.in",
+    "phoneNumber": "9991112221",
+    "accountNumber": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+    "photo": "2.jpg"
+  }
+]

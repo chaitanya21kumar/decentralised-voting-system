@@ -7,7 +7,7 @@
 .env
 
 # testing
-/test
+/testing
 
 # next.js
 /.next/
