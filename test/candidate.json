@@ -1,0 +1,57 @@
+[
+  {
+   
+    "name": "Robert Brown",
+    "party": "Democratic Party",
+    "agenda": "Improving education and healthcare"
+   
+  },
+  {
+    "name": "Emily Davis",
+    "party": "Republican Party",
+    "agenda": "Lowering taxes and economic growth"
+   
+  },
+  {
+    
+    "name": "Michael Wilson",
+    "party": "Green Party",
+    "agenda": "Environmental sustainability and climate action"
+    
+  },
+  {
+    
+    "name": "Sophia Martinez",
+    "party": "Democratic Party",
+    "agenda": "Universal pre-K and housing reform"
+    
+  },
+  {
+  
+    "name": "James Lee",
+    "party": "Libertarian Party",
+    "agenda": "Reducing government surveillance and spending"
+   
+  },
+  {
+   
+    "name": "Ava Thompson",
+    "party": "Independent",
+    "agenda": "Campaign finance reform and political transparency"
+    
+  },
+  {
+   
+    "name": "William Taylor",
+    "party": "Republican Party",
+    "agenda": "Border security and defense funding"
+  
+  },
+  {
+  
+    "name": "Isabella Moore",
+    "party": "Green Party",
+    "agenda": "Clean energy and wildlife preservation"
+
+  }
+]
