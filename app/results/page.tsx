@@ -56,33 +56,47 @@ export default function ResultsPage() {
 
   useEffect(() => {
     const fetchResults = async () => {
-      const web3   = new Web3("http://127.0.0.1:8545");
+      const web3   = new Web3(process.env.NEXT_PUBLIC_RPC_URL || "http://127.0.0.1:8545");
       const voting = new web3.eth.Contract(votingAbi as any, votingAddress);
       try {
+        // First check if voting has been started
+        const votingStart = Number(await voting.methods.votingStart().call());
+        const votingEnd = Number(await voting.methods.votingEnd().call());
+        const detailsSet = await voting.methods.detailsSet().call();
+        
+        // If no election has been set up or started, show appropriate message
+        if (!detailsSet || votingStart === 0) {
+          setLoading(false);
+          return;
+        }
+
         // get votingEnd timestamp on-chain
-        endRef.current   = Number(await voting.methods.votingEnd().call());
+        endRef.current   = votingEnd;
         // grab the block timestamp when we start
         const block      = await web3.eth.getBlock("latest");
         startRef.current = Number(block.timestamp);
 
-        // update progress bar until votingEnd
-        const barInterval = setInterval(() => {
-          const now     = Date.now() / 1000;
-          const total   = endRef.current - startRef.current;
-          const elapsed = now - startRef.current;
-          const left    = Math.max(0, endRef.current - now);
-          setTimeLeft(left);
-          setPercent(Math.max(0, 100 - (elapsed / total) * 100));
-          if (now >= endRef.current) clearInterval(barInterval);
-        }, 1000);
+        // If voting is still ongoing, show countdown
+        if (Date.now() / 1000 < votingEnd) {
+          // update progress bar until votingEnd
+          const barInterval = setInterval(() => {
+            const now     = Date.now() / 1000;
+            const total   = endRef.current - startRef.current;
+            const elapsed = now - startRef.current;
+            const left    = Math.max(0, endRef.current - now);
+            setTimeLeft(left);
+            setPercent(Math.max(0, 100 - (elapsed / total) * 100));
+            if (now >= endRef.current) {
+              clearInterval(barInterval);
+              // Refresh the page to show results
+              window.location.reload();
+            }
+          }, 1000);
 
-        // wait for the voting window to close
-        while (Date.now() / 1000 < endRef.current) {
-          await new Promise(r => setTimeout(r, 2000));
+          return; // Stay in loading state while voting is active
         }
-        clearInterval(barInterval);
 
-        // now fetch all candidates
+        // Voting has ended, fetch results
         const count = Number(await voting.methods.getCandidateCount().call());
         const arr: Candidate[] = [];
         for (let i = 0; i < count; i++) {
@@ -113,26 +127,40 @@ export default function ResultsPage() {
     fetchResults();
   }, []);
 
-  // Loading state
+  // Loading state - voting active or not started
   if (loading) {
     return (
       <section className="bg-gray-950 text-white min-h-screen flex flex-col items-center justify-center space-y-4">
-        <p className="text-indigo-300">
-          Voting ends in{" "}
-          {timeLeft !== null
-            ? formatSecondsToHHMMSS(timeLeft)
-            : "--:--:--"}
-        </p>
-        <div className="w-full max-w-md bg-gray-700 h-3 rounded-full">
-          <div
-            className="h-3 rounded-full bg-indigo-500 transition-all"
-            style={{ width: `${percent}%` }}
-          />
-        </div>
-        <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-indigo-500"/>
-        <p className="text-indigo-300 font-semibold">
-          {loadingMessages[msgIndex]}
-        </p>
+        {timeLeft !== null ? (
+          <>
+            <p className="text-indigo-300">
+              Voting ends in{" "}
+              {formatSecondsToHHMMSS(timeLeft)}
+            </p>
+            <div className="w-full max-w-md bg-gray-700 h-3 rounded-full">
+              <div
+                className="h-3 rounded-full bg-indigo-500 transition-all"
+                style={{ width: `${percent}%` }}
+              />
+            </div>
+            <div className="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-indigo-500"/>
+            <p className="text-indigo-300 font-semibold">
+              {loadingMessages[msgIndex]}
+            </p>
+          </>
+        ) : (
+          <>
+            <div className="text-center py-16">
+              <h2 className="text-2xl font-bold text-indigo-400 mb-4">Election Not Started</h2>
+              <p className="text-gray-400 text-lg mb-2">
+                The election has not been started by the admin yet.
+              </p>
+              <p className="text-gray-500">
+                Please wait for the admin to set up and start the voting process.
+              </p>
+            </div>
+          </>
+        )}
       </section>
     );
   }

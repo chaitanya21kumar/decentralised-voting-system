@@ -1,30 +1,47 @@
 // middleware.ts
 import { NextRequest, NextResponse } from "next/server";
 
-// Define protected routes
-const protectedRoutes = [
+// Define voter-only routes
+const voterOnlyRoutes = [
   "/voter",
-  "/results",
-  "/candidates",
   "/change-password",
   "/signinusers",
-  "/admin_page",
+];
+
+// Define admin-accessible routes (in addition to admin_page)
+const adminAccessibleRoutes = [
+  "/results",
+  "/candidates",
 ];
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
-   let response: NextResponse | undefined = undefined;
+  let response: NextResponse | undefined = undefined;
+  
   // 1. Authentication checks & possible redirects
-  if (pathname === "/admin_page") {
-    const isAdminLoggedIn = request.cookies.get("adminToken")?.value;
-    if (!isAdminLoggedIn) {
+  if (pathname.startsWith("/admin_page")) {
+    const adminToken = request.cookies.get("adminToken")?.value;
+    
+    if (!adminToken) {
       const url = request.nextUrl.clone();
       url.pathname = "/admin";
       response = NextResponse.redirect(url);
     }
-  } else if (protectedRoutes.includes(pathname)) {
-    const isVoterLoggedIn = request.cookies.get("voterToken")?.value;
-    if (!isVoterLoggedIn) {
+  } else if (adminAccessibleRoutes.includes(pathname)) {
+    // Routes that both admin and voters can access
+    const adminToken = request.cookies.get("adminToken")?.value;
+    const voterToken = request.cookies.get("voterToken")?.value;
+    
+    if (!adminToken && !voterToken) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/signin";
+      response = NextResponse.redirect(url);
+    }
+  } else if (voterOnlyRoutes.includes(pathname)) {
+    // Voter-only routes
+    const voterToken = request.cookies.get("voterToken")?.value;
+    
+    if (!voterToken) {
       const url = request.nextUrl.clone();
       url.pathname = "/signin";
       response = NextResponse.redirect(url);
@@ -52,9 +69,9 @@ export const config = {
   matcher: [
     "/voter",
     "/results",
-    "/candidates",
+    "/candidates", 
     "/change-password",
     "/signinusers",
-    "/admin_page",
+    "/admin_page/:path*",
   ],
 };

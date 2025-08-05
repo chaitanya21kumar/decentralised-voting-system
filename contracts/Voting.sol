@@ -13,6 +13,7 @@ contract Voting is ReentrancyGuard {
 
     uint256 public candidateCount;
     uint256 public voterCount;
+    uint256 public totalVotesCast;
 
     uint256 public votingStart;
     uint256 public votingEnd;
@@ -120,6 +121,48 @@ contract Voting is ReentrancyGuard {
         emit AdminRemoved(_admin);
     }
 
+        /// @notice Resets all per-election state so you can run another election
+    function resetElection() external onlyAdmin notPaused {
+        require(votingStart == 0 || block.timestamp > votingEnd, "Election still active");
+        votingStart = 0;
+        votingEnd   = 0;
+
+        // Clear candidates and name registry
+        for (uint256 i = 0; i < candidateCount; i++) {
+            delete candidates[i];
+        }
+        for (uint256 i = 0; i < candidateHashes.length; i++) {
+            candidateNameExists[candidateHashes[i]] = false;
+        }
+        delete candidateHashes;
+        candidateCount = 0;
+
+        // Clear vote state
+        for (uint256 i = 0; i < votedVoters.length; i++) {
+            hasVoted[votedVoters[i]] = false;
+        }
+
+        // Clear voter registry
+        for (uint i = 0; i < registeredVoters.length; i++) {
+            delete voters[registeredVoters[i]];
+        }
+        delete registeredVoters;
+        voterCount = 0;
+        delete votedVoters;
+        totalVotesCast = 0;
+
+        // Clear election details
+        detailsSet = false;
+        delete election;
+
+        // Reset leader tracking
+        leadingCandidate = 0;
+        highestVotes     = 0;
+
+        emit ElectionReset();
+    }
+
+
     // --- Election Setup ---
     /// @notice Sets up election parameters before starting
     function setElectionDetails(
@@ -152,7 +195,7 @@ contract Voting is ReentrancyGuard {
         require(votingStart == 0 || block.timestamp > votingEnd, "Ongoing election");
 
         votingStart = block.timestamp;
-        votingEnd = votingStart + durationMinutes * 1 minutes;
+        votingEnd   = votingStart + (durationMinutes * 60);   // Use provided duration
         emit ElectionStarted(votingStart, votingEnd);
     }
 
@@ -224,7 +267,20 @@ contract Voting is ReentrancyGuard {
         emit VoteCast(msg.sender, _candidateId);
     }
 
-    // --- Results ---
+    // --- Election Conclusion ---
+    function endElection() public onlyAdmin notPaused {
+        require(votingStart > 0, "No active election");
+        require(votingEnd > 0, "Election not started");
+        
+        // Allow ending early by setting votingEnd to current time
+        if (block.timestamp < votingEnd) {
+            votingEnd = block.timestamp;
+        }
+        
+        emit ElectionEnded(block.timestamp);
+    }
+
+    // ─────────────────── Results & Winner ──────────────────────
     function declareWinner()
         external
         onlyAdmin

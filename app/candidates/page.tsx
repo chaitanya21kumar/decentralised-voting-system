@@ -6,10 +6,11 @@ import { showToast } from "../../pages/api/admin/showToast";
 import toast from "react-hot-toast";
 
 type Candidate = {
-  candidateId: number;
+  candidateId?: number;
   name: string;
-  party: string;
-  agenda: string;
+  party?: string;
+  agenda?: string;
+  slogan?: string;
 };
 
 export default function CandidateList() {
@@ -47,14 +48,18 @@ export default function CandidateList() {
         </h1>
 
         <div className="flex flex-col space-y-4">
-          {candidates.map((candidate) => (
+          {candidates.map((candidate, index) => (
             <div
-              key={candidate.candidateId}
+              key={candidate.candidateId || index}
               className="bg-gray-800 rounded-lg p-6 hover:bg-gray-700 transition"
             >
               <h2 className="text-xl font-semibold mb-2">{candidate.name}</h2>
-              <p className="text-indigo-400 mb-1">Party: {candidate.party}</p>
-              <p className="text-indigo-200 mb-4">"{candidate.agenda}"</p>
+              {candidate.party && (
+                <p className="text-indigo-400 mb-1">Party: {candidate.party}</p>
+              )}
+              <p className="text-indigo-200 mb-4">
+                "{candidate.agenda || candidate.slogan || 'No agenda provided'}"
+              </p>
             </div>
           ))}
         </div>

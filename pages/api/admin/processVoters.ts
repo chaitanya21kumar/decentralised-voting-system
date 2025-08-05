@@ -40,8 +40,23 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Step 1: DB + Web3
     await connectToDatabase();
 
+    // Force localhost for local development
     const rpcUrl = process.env.RPC_URL || "http://127.0.0.1:8545";
+    console.log("🔗 Connecting to:", rpcUrl);
     const web3 = new Web3(rpcUrl);
+
+    // Test connection first
+    try {
+      const blockNumber = await web3.eth.getBlockNumber();
+      console.log("✅ Connected to blockchain, latest block:", blockNumber);
+    } catch (connectionError) {
+      console.error("❌ Cannot connect to Hardhat node:", connectionError);
+      return res.status(500).json({
+        success: false,
+        message: "Cannot connect to blockchain. Please ensure Hardhat node is running on localhost:8545",
+        error: "Connection failed"
+      });
+    }
 
     const accounts = await web3.eth.getAccounts();
     if (!accounts || accounts.length < 2) {

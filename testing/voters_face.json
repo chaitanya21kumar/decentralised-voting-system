@@ -1,0 +1,18 @@
+[
+  {
+    "rollNumber": "23BCS046",
+    "name": "Ayush Agarwal",
+    "email": "23bcs046@iiitdmj.ac.in",
+    "phoneNumber": "1234567891",
+    "accountNumber": "0x5d5C1F85e0D6bf633F8D74d4f23642acdb2a0A42",
+    "photo": "23BCS046.jpg"
+  },
+  {
+    "rollNumber": "2",
+    "name": "Abhinav Harsh",
+    "email": "23bcs006@iiitdmj.ac.in",
+    "phoneNumber": "9991112221",
+    "accountNumber": "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC",
+    "photo": "2.jpg"
+  }
+]

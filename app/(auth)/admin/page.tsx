@@ -24,7 +24,7 @@ export default function SignIn() {
       
       if (response.status === 200) {
         showToast("Login successful!", "success");
-        router.push("/admin_page");
+        router.push("/admin_page/dashboard");
       } else {
         showToast("Login failed. Please check your credentials.", "error");
       }

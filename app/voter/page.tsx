@@ -26,12 +26,59 @@ export default function VotingPage() {
   });
   const [verified, setVerified] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
+  const [votingActive, setVotingActive] = useState(false);
+  const [electionStatus, setElectionStatus] = useState("");
   const fetchedOnce = useRef(false);
 
-  // 1) Load candidates
+  /* ───────── helpers ───────── */
+  const getContract = async () => {
+    const web3 = new Web3(process.env.NEXT_PUBLIC_RPC_URL || "http://127.0.0.1:8545");
+    const voting = new web3.eth.Contract(votingAbi as any, votingAddress);
+    const accounts = await web3.eth.getAccounts();
+    return { voting, adminAccount: accounts[0] };
+  };
+
+  /* ───── check election status ───── */
+  const checkElectionStatus = async () => {
+    try {
+      const { voting } = await getContract();
+      const votingStart = Number(await voting.methods.votingStart().call());
+      const votingEnd = Number(await voting.methods.votingEnd().call());
+      const detailsSet = await voting.methods.detailsSet().call();
+      const isPaused = await voting.methods.isPaused().call();
+      
+      const now = Math.floor(Date.now() / 1000);
+      
+      if (isPaused) {
+        setElectionStatus("Election is paused by admin");
+        setVotingActive(false);
+      } else if (!detailsSet || votingStart === 0) {
+        setElectionStatus("Election has not been started yet");
+        setVotingActive(false);
+      } else if (now < votingStart) {
+        setElectionStatus("Election hasn't started yet");
+        setVotingActive(false);
+      } else if (now > votingEnd) {
+        setElectionStatus("Election has ended");
+        setVotingActive(false);
+      } else {
+        setElectionStatus("Election is active - you can vote!");
+        setVotingActive(true);
+      }
+    } catch (error) {
+      console.error("Error checking election status:", error);
+      setElectionStatus("Error checking election status");
+      setVotingActive(false);
+    }
+  };
+
+  /* ───── load candidates once ───── */
   useEffect(() => {
     if (fetchedOnce.current) return;
     fetchedOnce.current = true;
+
+    // Check election status first
+    checkElectionStatus();
 
     axios
       .get("/api/admin/getCandidates")
@@ -41,7 +88,7 @@ export default function VotingPage() {
             res.data.candidates.map((c: any, i: number) => ({
               candidateId: i + 1,
               name: c.name,
-              slogan: c.agenda || c.slogan || "",
+              slogan: c.agenda || c.slogan || "No agenda provided",
               votes: 0,
             }))
           );
@@ -64,10 +111,10 @@ export default function VotingPage() {
             accountnumber: res.data.accountNumber,
           }));
         } else {
-          showToast("You must be signed in to access this page.", "error");
+          showToast("You must be signed in.", "error");
         }
       } catch {
-        showToast("Error fetching voter session.", "error");
+        showToast("Error fetching session.", "error");
       }
     };
 
@@ -97,34 +144,46 @@ export default function VotingPage() {
     }
 
     const verifyPromise = (async () => {
+      // First, get voter details including DID from database
+      const voterResponse = await axios.post("/api/verify-voter", { rollNumber });
+      if (!voterResponse.data.success) {
+        throw new Error("Voter not found in database");
+      }
+      
+      const voterData = voterResponse.data.voter;
+      const voterDID = voterData.did; // This is the IPFS hash used as DID
+      
+      // Now verify on blockchain with correct DID
       const { voting, adminAccount } = await getContract();
       await voting.methods
-        .verifyVoter(accountnumber, rollNumber)
+        .verifyVoter(accountnumber, voterDID)
         .send({ from: adminAccount, gas: 300_000 });
       setVerified(true); // Set verified to true after successful verification
     })();
 
     showToastPromise(verifyPromise, {
-      loading: "Verifying voter...",
-      success: "Voter verified!",
+      loading: "Verifying voter…",
+      success: "✅ Voter verified!",
       error: (err) => {
         const message = err?.message || "";
-        if (message.includes("not verified")) return "You are not a verified voter.";
-        if (message.includes("Invalid account")) return "Invalid account address.";
-        if (message.includes("Invalid roll number")) return "Invalid roll number.";
-        return "Verification failed.";
+        if (message.includes("Not registered")) return "You are not registered to vote.";
+        if (message.includes("DID mismatch")) return "Verification failed: Identity mismatch.";
+        if (message.includes("Voter not found")) return "Voter not found in database.";
+        if (message.includes("Already verified")) return "You are already verified.";
+        return "Verification failed. Please try again.";
       },
     });
   };
 
   // 3) Cast vote
   const handleVote = async () => {
-    if (!verified || !voterDetails.accountnumber) {
-      showToast("You must verify first.", "error");
+    if (!votingActive) {
+      showToast("Voting is not currently active. " + electionStatus, "error");
       return;
     }
-    if (selected === null) {
-      showToast("Select a candidate.", "error");
+    
+    if (!blockchainVerified || selected === null) {
+      showToast("Verify & select a candidate first.", "error");
       return;
     }
 
@@ -144,29 +203,62 @@ export default function VotingPage() {
     <section className="bg-gray-950 text-white min-h-screen">
       <SignHeader />
       <div className="container mx-auto px-4 py-12">
-        <h1 className="text-3xl font-bold text-center mb-8">Cast Your Vote</h1>
-
-        {/* Voter Verification */}
-        <div className="max-w-md mx-auto bg-gray-800 p-6 rounded-lg mb-8">
-          <h2 className="text-xl font-semibold mb-4">Voter Verification</h2>
-          {verified && voterDetails ? (
-            <p className="text-green-400">
-              ✅ Hello {voterDetails.name}, you’re verified!
+        <h1 className="text-3xl font-bold text-center mb-4">Cast Your Vote</h1>
+        
+        {/* Election Status Banner */}
+        <div className={`max-w-md mx-auto p-4 rounded-lg mb-8 text-center ${
+          votingActive ? 'bg-green-800 border border-green-600' : 'bg-red-800 border border-red-600'
+        }`}>
+          <p className={`font-semibold ${votingActive ? 'text-green-200' : 'text-red-200'}`}>
+            {electionStatus}
+          </p>
+          {!votingActive && (
+            <p className="text-sm text-gray-400 mt-2">
+              Please contact the admin or wait for the election to begin.
             </p>
-          ) : (
-            <>
-              <input
-                type="text"
-                value={voterDetails.rollNumber}
-                onChange={(e) =>
-                  setVoterDetails((prev) => ({
-                    ...prev,
-                    rollNumber: e.target.value,
-                  }))
-                }
-                placeholder="Enter Roll Number"
-                className="w-full mb-4 p-2 bg-gray-700 rounded"
+          )}
+        </div>
+
+        {/* ── Step 1 : roll # + face ───────────────────────────── */}
+        {!faceVerified && (
+          <div className="max-w-md mx-auto bg-gray-800 p-6 rounded-lg mb-8">
+            <h2 className="text-xl font-semibold mb-4">
+              Step 1 : Roll&nbsp;Number + Face Check
+            </h2>
+
+            {/* roll number input */}
+            <input
+              type="text"
+              value={voterDetails.rollNumber}
+              onChange={(e) =>
+                setVoterDetails((p) => ({ ...p, rollNumber: e.target.value }))
+              }
+              placeholder="Enter Roll Number"
+              className="w-full mb-4 p-2 bg-gray-700 rounded"
+            />
+
+            {/* webcam appears only after roll # entered */}
+            {voterDetails.rollNumber.trim() && (
+              <FaceVerification
+                rollNumber={voterDetails.rollNumber.trim()}
+                onVerified={() => setFaceVerified(true)}
               />
+            )}
+          </div>
+        )}
+
+        {/* ── Step 2 : on-chain verify ─────────────────────────── */}
+        {faceVerified && (
+          <div className="max-w-md mx-auto bg-gray-800 p-6 rounded-lg mb-8">
+            <h2 className="text-xl font-semibold mb-4">
+              Step 2 : Verify on Blockchain
+            </h2>
+
+            {blockchainVerified ? (
+              <p className="text-green-400">
+                ✅ Hello {voterDetails.name}, you’re verified!
+              </p>
+            ) : (
               <button
                 onClick={handleVerify}
                 className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded"
@@ -203,17 +295,17 @@ export default function VotingPage() {
         <div className="flex justify-center mt-8">
           <button
             onClick={handleVote}
-            disabled={!verified || selected === null}
+            disabled={!blockchainVerified || selected === null || !votingActive}
             className={`
               px-6 py-3 rounded text-white
               ${
-                verified && selected !== null
+                blockchainVerified && selected !== null && votingActive
                   ? "bg-indigo-600 hover:bg-indigo-700"
                   : "bg-gray-600 cursor-not-allowed"
               }
             `}
           >
-            Submit Vote
+            {!votingActive ? "Voting Not Active" : "Submit Vote"}
           </button>
         </div>
       </div>
