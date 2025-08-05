@@ -1,12 +1,21 @@
+// app/voter/page.tsx
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import Web3 from "web3";
 import axios from "axios";
+
 import SignHeader from "@/components/ui/signHeader";
 import { showToast, showToastPromise } from "../../pages/api/admin/showToast";
 import { votingAbi, votingAddress } from "../artifacts/votingArtifact";
+
+/* ───── lazy-load webcam component ───── */
+const FaceVerification = dynamic(
+  () => import("@/components/ui/FaceVerification"),
+  { ssr: false }
+);
 
 interface Candidate {
   candidateId: number;
@@ -17,6 +26,8 @@ interface Candidate {
 
 export default function VotingPage() {
   const router = useRouter();
+
+  /* ──────────── state ──────────── */
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [voterDetails, setVoterDetails] = useState({
     rollNumber: "",
@@ -24,7 +35,9 @@ export default function VotingPage() {
     name: "",
     phoneNumber: "",
   });
-  const [verified, setVerified] = useState(false);
+
+  const [faceVerified, setFaceVerified] = useState(false);
+  const [blockchainVerified, setBlockchainVerified] = useState(false);
   const [selected, setSelected] = useState<number | null>(null);
   const [votingActive, setVotingActive] = useState(false);
   const [electionStatus, setElectionStatus] = useState("");
@@ -32,44 +45,10 @@ export default function VotingPage() {
 
   /* ───────── helpers ───────── */
   const getContract = async () => {
-    const web3 = new Web3(process.env.NEXT_PUBLIC_RPC_URL || "http://127.0.0.1:8545");
+    const web3 = new Web3("http://127.0.0.1:8545");
     const voting = new web3.eth.Contract(votingAbi as any, votingAddress);
     const accounts = await web3.eth.getAccounts();
     return { voting, adminAccount: accounts[0] };
-  };
-
-  /* ───── check election status ───── */
-  const checkElectionStatus = async () => {
-    try {
-      const { voting } = await getContract();
-      const votingStart = Number(await voting.methods.votingStart().call());
-      const votingEnd = Number(await voting.methods.votingEnd().call());
-      const detailsSet = await voting.methods.detailsSet().call();
-      const isPaused = await voting.methods.isPaused().call();
-      
-      const now = Math.floor(Date.now() / 1000);
-      
-      if (isPaused) {
-        setElectionStatus("Election is paused by admin");
-        setVotingActive(false);
-      } else if (!detailsSet || votingStart === 0) {
-        setElectionStatus("Election has not been started yet");
-        setVotingActive(false);
-      } else if (now < votingStart) {
-        setElectionStatus("Election hasn't started yet");
-        setVotingActive(false);
-      } else if (now > votingEnd) {
-        setElectionStatus("Election has ended");
-        setVotingActive(false);
-      } else {
-        setElectionStatus("Election is active - you can vote!");
-        setVotingActive(true);
-      }
-    } catch (error) {
-      console.error("Error checking election status:", error);
-      setElectionStatus("Error checking election status");
-      setVotingActive(false);
-    }
   };
 
   /* ───── load candidates once ───── */
@@ -92,17 +71,16 @@ export default function VotingPage() {
               votes: 0,
             }))
           );
-        } else {
-          showToast("Failed to load candidates", "error");
-        }
+        } else showToast("Failed to load candidates", "error");
       })
       .catch(() => showToast("Error loading candidates", "error"));
   }, []);
 
+  /* ───── load voter session ───── */
   useEffect(() => {
-    const fetchVoter = async () => {
+    (async () => {
       try {
-        const res = await axios.get("/api/admin/me");
+        const res = await axios.get("/api/voter/me");
         if (res.data.authenticated) {
           setVoterDetails((prev) => ({
             ...prev,
@@ -110,38 +88,25 @@ export default function VotingPage() {
             name: res.data.name,
             accountnumber: res.data.accountNumber,
           }));
-        } else {
-          showToast("You must be signed in.", "error");
-        }
+        } else showToast("You must be signed in.", "error");
       } catch {
         showToast("Error fetching session.", "error");
       }
-    };
-
-    fetchVoter();
+    })();
   }, []);
 
-  // helper to get contract + admin account
-  const getContract = async () => {
-    const web3 = new Web3("http://127.0.0.1:8545");
-    const voting = new web3.eth.Contract(votingAbi as any, votingAddress);
-    const accounts = await web3.eth.getAccounts();
-    return { voting, adminAccount: accounts[0] };
-  };
-
-  // 2) Verify Voter
-  const handleVerify = async () => {
+  /* ───── on-chain verify ───── */
+  const handleVerifyOnChain = async () => {
+    if (!faceVerified) {
+      showToast("Complete face verification first.", "error");
+      return;
+    }
     if (!voterDetails.rollNumber.trim()) {
       showToast("Enter your roll number.", "error");
       return;
     }
 
     const { rollNumber, accountnumber } = voterDetails;
-
-    if (!rollNumber || !accountnumber) {
-      showToast("Please fill all voter details.", "error");
-      return;
-    }
 
     const verifyPromise = (async () => {
       // First, get voter details including DID from database
@@ -158,30 +123,18 @@ export default function VotingPage() {
       await voting.methods
         .verifyVoter(accountnumber, voterDID)
         .send({ from: adminAccount, gas: 300_000 });
-      setVerified(true); // Set verified to true after successful verification
+      setBlockchainVerified(true);
     })();
 
     showToastPromise(verifyPromise, {
       loading: "Verifying voter…",
       success: "✅ Voter verified!",
-      error: (err) => {
-        const message = err?.message || "";
-        if (message.includes("Not registered")) return "You are not registered to vote.";
-        if (message.includes("DID mismatch")) return "Verification failed: Identity mismatch.";
-        if (message.includes("Voter not found")) return "Voter not found in database.";
-        if (message.includes("Already verified")) return "You are already verified.";
-        return "Verification failed. Please try again.";
-      },
+      error: "Verification failed.",
     });
   };
 
-  // 3) Cast vote
+  /* ───── vote handler ───── */
   const handleVote = async () => {
-    if (!votingActive) {
-      showToast("Voting is not currently active. " + electionStatus, "error");
-      return;
-    }
-    
     if (!blockchainVerified || selected === null) {
       showToast("Verify & select a candidate first.", "error");
       return;
@@ -199,25 +152,13 @@ export default function VotingPage() {
     }).then(() => router.push("/results"));
   };
 
+  /* ──────────── UI ──────────── */
   return (
     <section className="bg-gray-950 text-white min-h-screen">
       <SignHeader />
+
       <div className="container mx-auto px-4 py-12">
-        <h1 className="text-3xl font-bold text-center mb-4">Cast Your Vote</h1>
-        
-        {/* Election Status Banner */}
-        <div className={`max-w-md mx-auto p-4 rounded-lg mb-8 text-center ${
-          votingActive ? 'bg-green-800 border border-green-600' : 'bg-red-800 border border-red-600'
-        }`}>
-          <p className={`font-semibold ${votingActive ? 'text-green-200' : 'text-red-200'}`}>
-            {electionStatus}
-          </p>
-          {!votingActive && (
-            <p className="text-sm text-gray-400 mt-2">
-              Please contact the admin or wait for the election to begin.
-            </p>
-          )}
-        </div>
+        <h1 className="text-3xl font-bold text-center mb-8">Cast Your Vote</h1>
 
         {/* ── Step 1 : roll # + face ───────────────────────────── */}
         {!faceVerified && (
@@ -260,24 +201,28 @@ export default function VotingPage() {
               </p>
             ) : (
               <button
-                onClick={handleVerify}
+                onClick={handleVerifyOnChain}
                 className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded"
               >
                 Verify Voter
               </button>
-            </>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
-        {/* Candidates */}
+        {/* ── Candidates ─────────────────────────────────────── */}
         <div className="grid md:grid-cols-3 gap-6">
           {candidates.map((c) => (
             <div
               key={c.candidateId}
-              onClick={() => verified && setSelected(c.candidateId)}
+              onClick={() =>
+                blockchainVerified && setSelected(c.candidateId)
+              }
               className={`
                 bg-gray-800 rounded-lg p-6 cursor-pointer transition
-                ${!verified ? "opacity-50 cursor-not-allowed" : ""}
+                ${
+                  !blockchainVerified ? "opacity-50 cursor-not-allowed" : ""
+                }
                 ${
                   selected === c.candidateId
                     ? "border-4 border-indigo-600"
@@ -291,15 +236,15 @@ export default function VotingPage() {
           ))}
         </div>
 
-        {/* Submit Vote */}
+        {/* ── Submit Vote ─────────────────────────────────────── */}
         <div className="flex justify-center mt-8">
           <button
             onClick={handleVote}
-            disabled={!blockchainVerified || selected === null || !votingActive}
+            disabled={!blockchainVerified || selected === null}
             className={`
               px-6 py-3 rounded text-white
               ${
-                blockchainVerified && selected !== null && votingActive
+                blockchainVerified && selected !== null
                   ? "bg-indigo-600 hover:bg-indigo-700"
                   : "bg-gray-600 cursor-not-allowed"
               }

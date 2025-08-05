@@ -19,16 +19,26 @@ export default function SignIn() {
     setErrorMessage(null);
     setLoading(true); // start loading
 
+    console.log('Attempting admin login with:', { email, password: '*'.repeat(password.length) });
+
     try {
-      const response = await axios.post("/api/admin/login", { email, password });
+      const response = await axios.post("/api/admin/login", { email, password }, {
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log('Login response:', response.status, response.data);
       
       if (response.status === 200) {
         showToast("Login successful!", "success");
-        router.push("/admin_page/dashboard");
+        console.log('Redirecting to /admin/dashboard');
+        router.push("/admin/dashboard");
       } else {
         showToast("Login failed. Please check your credentials.", "error");
       }
     } catch (error) {
+      console.error('Login error:', error);
       if (axios.isAxiosError(error) && error.response?.status === 401) {
         showToast("Unauthorized access. Please check your credentials.", "error");
       } else {

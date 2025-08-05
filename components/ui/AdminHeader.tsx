@@ -7,13 +7,26 @@ import Logo from "./logo";
 
 export default function AdminHeader() {
   const [loggedIn, setLoggedIn] = useState(false);
+  const [adminInfo, setAdminInfo] = useState<any>(null);
   const router = useRouter();
 
+  useEffect(() => {
+    axios
+      .get("/api/admin/me")
+      .then((res) => {
+        setLoggedIn(res.data.authenticated);
+        setAdminInfo(res.data);
+      })
+      .catch(() => {
+        setLoggedIn(false);
+        setAdminInfo(null);
+      });
+  }, []);
 
   const handleLogout = async () => {
     try {
-      await axios.post("/api/admin/logout-admin");
-      router.push("/");
+      await axios.post("/api/admin/logout");
+      router.push("/admin");
     } catch (error) {
       console.error("Logout error:", error);
     }
@@ -30,18 +43,25 @@ export default function AdminHeader() {
             <Logo />
           </div>
 
-          {/* Desktop sign in links */}
-          <ul className="flex flex-1 items-center justify-end gap-3">
-            <li>
-           <button
-              type="button"
-              onClick={handleLogout}
-              className="btn w-full bg-indigo-500 text-white hover:bg-indigo-700"
-            >
-              Logout
-            </button>
-            </li>
-          </ul>
+          {/* Admin info and controls */}
+          <div className="flex items-center gap-4">
+            {adminInfo && (
+              <span className="text-sm text-gray-300">
+                Admin: {adminInfo.name || adminInfo.email}
+              </span>
+            )}
+            <ul className="flex items-center gap-3">
+              <li>
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="btn bg-red-600 text-white hover:bg-red-700 px-4 py-2 rounded"
+                >
+                  Logout
+                </button>
+              </li>
+            </ul>
+          </div>
         </div>
       </div>
     </header>
