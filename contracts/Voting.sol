@@ -6,18 +6,17 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 /// @title Decentralized Voting Contract
 /// @notice Manages elections: candidate registration, voter registration, voting, and winner declaration
 contract Voting is ReentrancyGuard {
-    // ────────────────────────── State ──────────────────────────
+    // --- State Variables ---
     address public superAdmin;
     bool public isPaused;
     string public didRegistryCID;
 
     uint256 public candidateCount;
     uint256 public voterCount;
-
+    uint256 public totalVotesCast;
     uint256 public votingStart;
     uint256 public votingEnd;
     bool public detailsSet;
-
 
     // Tracks current leader to avoid unbounded loops in declareWinner
     uint256 public leadingCandidate;
@@ -27,7 +26,6 @@ contract Voting is ReentrancyGuard {
     bytes32[] private candidateHashes;
     address[] private votedVoters;
     address[] private registeredVoters;
-
 
     struct Candidate {
         uint256 id;
@@ -59,9 +57,9 @@ contract Voting is ReentrancyGuard {
     mapping(uint256 => Candidate) public candidates;
     mapping(address => bool) public admins;
     mapping(bytes32 => bool) private candidateNameExists;
-    mapping(address => bool) private hasVoted;
+    mapping(address => bool) public hasVoted;
 
-    // ────────────────────────── Events ─────────────────────────
+    // --- Events ---
     event DIDRegistryUpdated(string cid);
     event AdminAdded(address indexed admin);
     event AdminRemoved(address indexed admin);
@@ -76,7 +74,7 @@ contract Voting is ReentrancyGuard {
     event ContractPaused(bool paused);
     event ElectionReset();
 
-    // ────────────────────────── Modifiers ──────────────────────
+    // --- Modifiers ---
     modifier onlySuperAdmin() {
         require(msg.sender == superAdmin, "Only super admin");
         _;
@@ -92,23 +90,27 @@ contract Voting is ReentrancyGuard {
         _;
     }
 
+    /// @dev Automatically ends election if time expired
     modifier onlyWhenVotingActive() {
         if (votingEnd != 0 && block.timestamp > votingEnd) {
             endElection();
         }
         require(
-            block.timestamp >= votingStart && block.timestamp <= votingEnd,
+            votingStart != 0 &&
+            block.timestamp >= votingStart &&
+            block.timestamp <= votingEnd,
             "Voting not active"
         );
         _;
     }
 
+    /// @dev Requires election period to be over
     modifier onlyWhenVotingEnded() {
         require(votingEnd != 0 && block.timestamp > votingEnd, "Voting not ended");
         _;
     }
 
-    // ───────────────────────── Constructor ─────────────────────
+    // --- Constructor ---
     constructor(string memory _didRegistryCID) {
         superAdmin = msg.sender;
         admins[msg.sender] = true;
@@ -116,7 +118,7 @@ contract Voting is ReentrancyGuard {
         emit DIDRegistryUpdated(_didRegistryCID);
     }
 
-    // ─────────────────── Admin / Setup Logic ───────────────────
+    // --- Admin Functions ---
     function updateDIDRegistry(string memory _cid) external onlySuperAdmin {
         didRegistryCID = _cid;
         emit DIDRegistryUpdated(_cid);
@@ -136,7 +138,7 @@ contract Voting is ReentrancyGuard {
 
         /// @notice Resets all per-election state so you can run another election
     function resetElection() external onlyAdmin notPaused {
-        require(votingStart == 0, "Election must be ended");
+        require(votingStart == 0 || (votingEnd != 0 && block.timestamp > votingEnd), "Election must be ended");
         votingStart = 0;
         votingEnd   = 0;
 
@@ -177,7 +179,6 @@ contract Voting is ReentrancyGuard {
 
 
     // --- Election Setup ---
-
     function setElectionDetails(
         string memory _adminName,
         string memory _adminEmail,
@@ -201,25 +202,21 @@ contract Voting is ReentrancyGuard {
         emit ElectionDetailsSet(_electionTitle, _maxVotes);
     }
 
-
     /// @notice Starts the election period
     /// @param durationMinutes Duration in minutes (must be > 0)
     function startElection(uint256 durationMinutes) external onlyAdmin notPaused {
-
         require(detailsSet, "Details not set");
         require(durationMinutes > 0, "Must be > 0");
         require(votingStart == 0 || block.timestamp > votingEnd, "Ongoing election");
 
         votingStart = block.timestamp;
-        votingEnd   = votingStart + VOTING_DURATION;   // ← exactly 10 minutes
+        votingEnd   = votingStart + (durationMinutes * 60);   // Use provided duration
         emit ElectionStarted(votingStart, votingEnd);
     }
-
 
     // --- Registration & Candidates ---
 
     /// @notice Registers a voter—only *before* the election starts
-
     function registerVoter(
         string memory _name,
         string memory _phone,
@@ -234,22 +231,16 @@ contract Voting is ReentrancyGuard {
         emit VoterRegistered(msg.sender, _name);
     }
 
-    function verifyVoter(address _voter, string memory _did)
-        external
-        onlyAdmin
-        notPaused
-    {
+    function verifyVoter(address _voter, string memory _did) external onlyAdmin notPaused {
         require(voters[_voter].isRegistered, "Not registered");
         require(
-            keccak256(abi.encodePacked(voters[_voter].did)) ==
-                keccak256(abi.encodePacked(_did)),
+            keccak256(abi.encodePacked(voters[_voter].did)) == keccak256(abi.encodePacked(_did)),
             "DID mismatch"
         );
 
         voters[_voter].isVerified = true;
         emit VoterVerified(_voter);
     }
-
 
     function addCandidate(string memory _name, string memory _slogan) external onlyAdmin notPaused {
         require(bytes(_name).length > 0, "Name required");
@@ -264,7 +255,6 @@ contract Voting is ReentrancyGuard {
     }
 
     // --- Voting ---
-
     function vote(uint256 _candidateId)
         external
         onlyWhenVotingActive
@@ -282,10 +272,8 @@ contract Voting is ReentrancyGuard {
         // Cast the vote
         candidates[_candidateId].votes++;
         hasVoted[msg.sender] = true;
-
         votedVoters.push(msg.sender);
         totalVotesCast++;
-
         emit VoteCast(msg.sender, _candidateId);
 
         // Update leader incrementally (avoids gas‐heavy loops)
@@ -296,12 +284,12 @@ contract Voting is ReentrancyGuard {
     }
 
     // --- Election Conclusion ---
-    function endElection() public onlyAdmin notPaused onlyWhenVotingEnded {
+    function endElection() public onlyAdmin notPaused {
         votingStart = 0;
         emit ElectionEnded(block.timestamp);
     }
 
-    // ─────────────────── Results & Winner ──────────────────────
+    // --- Results ---
     function declareWinner()
         external
         onlyAdmin
@@ -313,26 +301,29 @@ contract Voting is ReentrancyGuard {
             uint256 maxVotes
         )
     {
-
         winnerId  = leadingCandidate;
         winnerName = candidates[leadingCandidate].name;
         maxVotes  = highestVotes;
-
         emit WinnerDeclared(winnerId, winnerName, maxVotes);
     }
 
-    // ───────────────────── Pause switch ────────────────────────
+    // --- Pause ---
     function pauseContract(bool _pause) external onlySuperAdmin {
         isPaused = _pause;
         emit ContractPaused(_pause);
     }
 
-    // ───────────────────── Read-only helpers ───────────────────
+    // --- Helpers ---
     function getCandidateCount() external view returns (uint256) {
         return candidateCount;
     }
 
     function getVoter(address _voter) external view returns (Voter memory) {
         return voters[_voter];
+    }
+
+    function getVoterTurnout() external view returns (uint256 turnoutPercentage) {
+        if (voterCount == 0) return 0;
+        return (totalVotesCast * 100) / voterCount;
     }
 }
