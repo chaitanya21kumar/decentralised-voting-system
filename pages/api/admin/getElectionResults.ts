@@ -1,7 +1,7 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import fs from "fs";
 import path from "path";
-import { votingAddress } from "../../../app/artifacts/votingArtifact";
+import { votingAddress } from "../../../app/artifacts/votingArtifact.js";
 const Web3 = require("web3");
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {

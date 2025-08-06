@@ -1,6 +1,6 @@
 import type { NextApiRequest, NextApiResponse } from "next";
 import Web3 from "web3";
-import { votingAbi, votingAddress } from "../../../../app/artifacts/votingArtifact";
+import { votingAbi, votingAddress } from "../../../../app/artifacts/votingArtifact.js";
 
 export default async function handler(
   req: NextApiRequest,

@@ -6,7 +6,7 @@ import bcrypt from "bcryptjs";
 import nodemailer from "nodemailer";
 import fs from "fs";
 import path from "path";
-import { votingAddress } from "../../../app/artifacts/votingArtifact";
+import { votingAddress } from "../../../app/artifacts/votingArtifact.js";
 const Web3 = require("web3");
 
 const generatePassword = (len = 8) => {

@@ -5,7 +5,7 @@ import dbConnect from "../../../lib/mongodb";
 import IpfsHash from "../../../models/IpfsHash";
 import fs from "fs";
 import path from "path";
-import { votingAddress } from "../../../app/artifacts/votingArtifact";
+import { votingAddress } from "../../../app/artifacts/votingArtifact.js";
 const Web3 = require("web3");
 
 export default async function handler(
@@ -56,22 +56,7 @@ export default async function handler(
         .json({ success: false, message: "Invalid or empty candidates data" });
     }
 
-    /* 5 — election details */
-    await voting.methods
-      .setElectionDetails(
-        "Alice Johnson", // adminName
-        "test@gmail.com", // adminEmail
-        "Chief Electoral Officer", // adminTitle
-        "2025 Student Council Polls", // electionTitle
-        "ABC Institute of Technology", // organizationTitle
-        4 // maxVotes
-      )
-      .send({ from: admin, gas: 1_000_000 });
-
-    /* 6 — start 10-minute election (NO PARAM) */
-    await voting.methods.startElection().send({ from: admin });
-
-    /* 7 — add each candidate */
+    /* 5 — add each candidate (admin controls election setup and start separately) */
     for (const c of candidates) {
       console.log("Candidate from IPFS:", c);
       const tx = await voting.methods

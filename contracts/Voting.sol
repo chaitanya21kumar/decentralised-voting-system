@@ -138,7 +138,7 @@ contract Voting is ReentrancyGuard {
 
         /// @notice Resets all per-election state so you can run another election
     function resetElection() external onlyAdmin notPaused {
-        require(votingStart == 0, "Election must be ended");
+        require(votingStart == 0 || (votingEnd != 0 && block.timestamp > votingEnd), "Election must be ended");
         votingStart = 0;
         votingEnd   = 0;
 

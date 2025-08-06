@@ -6,7 +6,7 @@ import AdminHeader from "@/components/ui/AdminHeader";
 import AdminNavigation from "@/components/ui/AdminNavigation";
 import { showToast } from "../../../pages/api/admin/showToast";
 import Web3 from "web3";
-import { votingAbi, votingAddress } from "../../artifacts/votingArtifact";
+import { votingAbi, votingAddress } from "../../artifacts/votingArtifact.js";
 
 interface ElectionStats {
   candidateCount: number;
@@ -40,7 +40,8 @@ export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState("overview");
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [lastRefresh, setLastRefresh] = useState(new Date());
+  const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
+  const [mounted, setMounted] = useState(false);
   const [electionStats, setElectionStats] = useState<ElectionStats>({
     candidateCount: 0,
     voterCount: 0,
@@ -75,6 +76,8 @@ export default function AdminDashboard() {
   });
 
   useEffect(() => {
+    setMounted(true);
+    setLastRefresh(new Date());
     fetchElectionStats();
     fetchCandidates();
     fetchVoters();
@@ -334,12 +337,13 @@ export default function AdminDashboard() {
     try {
       const { contract, admin } = await getWeb3Contract();
       
-      // Check if election can be reset
+      // Check if election can be reset (should match contract logic)
       const votingStart = Number(await contract.methods.votingStart().call());
       const votingEnd = Number(await contract.methods.votingEnd().call());
       const now = Math.floor(Date.now() / 1000);
       
-      if (votingStart > 0 && votingEnd > 0 && now <= votingEnd) {
+      // Contract allows reset if: votingStart == 0 OR (votingEnd != 0 && now > votingEnd)
+      if (votingStart !== 0 && (votingEnd === 0 || now <= votingEnd)) {
         showToast("Cannot reset active election. Please end it first.", "error");
         return;
       }
@@ -427,9 +431,11 @@ export default function AdminDashboard() {
       <div className="flex justify-between items-center">
         <h2 className="text-xl font-semibold text-white">Election Overview</h2>
         <div className="flex items-center space-x-4">
-          <span className="text-sm text-gray-400">
-            Last updated: {lastRefresh.toLocaleTimeString()}
-          </span>
+          {mounted && lastRefresh && (
+            <span className="text-sm text-gray-400">
+              Last updated: {lastRefresh.toLocaleTimeString()}
+            </span>
+          )}
           <button
             onClick={refreshData}
             disabled={refreshing}
@@ -510,7 +516,7 @@ export default function AdminDashboard() {
               type="text"
               value={electionForm.adminName}
               onChange={(e) => setElectionForm({...electionForm, adminName: e.target.value})}
-              className="form-input w-full bg-gray-700 text-white"
+              className="w-full p-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-indigo-500 focus:outline-none"
             />
           </div>
           <div>
@@ -519,7 +525,7 @@ export default function AdminDashboard() {
               type="email"
               value={electionForm.adminEmail}
               onChange={(e) => setElectionForm({...electionForm, adminEmail: e.target.value})}
-              className="form-input w-full bg-gray-700 text-white"
+              className="w-full p-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-indigo-500 focus:outline-none"
             />
           </div>
           <div>
@@ -528,7 +534,7 @@ export default function AdminDashboard() {
               type="text"
               value={electionForm.adminTitle}
               onChange={(e) => setElectionForm({...electionForm, adminTitle: e.target.value})}
-              className="form-input w-full bg-gray-700 text-white"
+              className="w-full p-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-indigo-500 focus:outline-none"
             />
           </div>
           <div>
@@ -537,7 +543,7 @@ export default function AdminDashboard() {
               type="text"
               value={electionForm.electionTitle}
               onChange={(e) => setElectionForm({...electionForm, electionTitle: e.target.value})}
-              className="form-input w-full bg-gray-700 text-white"
+              className="w-full p-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-indigo-500 focus:outline-none"
             />
           </div>
           <div>
@@ -546,7 +552,7 @@ export default function AdminDashboard() {
               type="text"
               value={electionForm.organizationTitle}
               onChange={(e) => setElectionForm({...electionForm, organizationTitle: e.target.value})}
-              className="form-input w-full bg-gray-700 text-white"
+              className="w-full p-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-indigo-500 focus:outline-none"
             />
           </div>
           <div>
@@ -555,7 +561,7 @@ export default function AdminDashboard() {
               type="number"
               value={electionForm.maxVotes}
               onChange={(e) => setElectionForm({...electionForm, maxVotes: parseInt(e.target.value)})}
-              className="form-input w-full bg-gray-700 text-white"
+              className="w-full p-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-indigo-500 focus:outline-none"
               min="1"
             />
           </div>
@@ -565,7 +571,7 @@ export default function AdminDashboard() {
               type="number"
               value={electionForm.durationMinutes}
               onChange={(e) => setElectionForm({...electionForm, durationMinutes: parseInt(e.target.value)})}
-              className="form-input w-full bg-gray-700 text-white"
+              className="w-full p-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-indigo-500 focus:outline-none"
               min="1"
             />
           </div>
@@ -573,14 +579,14 @@ export default function AdminDashboard() {
         <div className="mt-6">
           <button
             onClick={handleSetElectionDetails}
-            className="btn bg-indigo-600 text-white hover:bg-indigo-700 mr-4"
+            className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors mr-4"
           >
             Set Election Details
           </button>
           <button
             onClick={handleStartElection}
             disabled={!electionStats.detailsSet || hasElectionStarted()}
-            className="btn bg-green-600 text-white hover:bg-green-700 disabled:bg-gray-600"
+            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
             title={!electionStats.detailsSet ? "Please set election details first" : hasElectionStarted() ? "Election already started" : "Start the election"}
           >
             Start Election
@@ -600,7 +606,7 @@ export default function AdminDashboard() {
             <input 
               type="file" 
               accept=".json" 
-              className="form-input w-full bg-gray-700 text-white" 
+              className="w-full p-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-indigo-500 focus:outline-none file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-600 file:text-white file:cursor-pointer hover:file:bg-indigo-700" 
               onChange={(e) => setVoterFile(e.target.files ? e.target.files[0] : null)} 
             />
           </div>
@@ -609,7 +615,7 @@ export default function AdminDashboard() {
             <input 
               type="file" 
               accept=".json" 
-              className="form-input w-full bg-gray-700 text-white" 
+              className="w-full p-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-indigo-500 focus:outline-none file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-indigo-600 file:text-white file:cursor-pointer hover:file:bg-indigo-700" 
               onChange={(e) => setCandidateFile(e.target.files ? e.target.files[0] : null)} 
             />
           </div>
@@ -623,7 +629,7 @@ export default function AdminDashboard() {
 
           <button
             onClick={handleFileUpload}
-            className="btn w-full bg-indigo-600 text-white hover:bg-indigo-700"
+            className="w-full px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
             disabled={loading}
           >
             {loading ? "Uploading..." : "Upload & Process Files"}
@@ -716,7 +722,7 @@ export default function AdminDashboard() {
           <button
             onClick={handleEndElection}
             disabled={!hasElectionStarted() || hasElectionEnded()}
-            className="btn bg-red-600 text-white hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
+            className="px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
             title={!hasElectionStarted() ? "No active election" : hasElectionEnded() ? "Election already ended" : "End the current election"}
           >
             End Election
@@ -724,21 +730,21 @@ export default function AdminDashboard() {
           <button
             onClick={handleResetElection}
             disabled={isElectionActive()}
-            className="btn bg-yellow-600 text-white hover:bg-yellow-700 disabled:bg-gray-600 disabled:cursor-not-allowed"
+            className="px-4 py-3 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:bg-gray-600 disabled:cursor-not-allowed transition-colors"
             title={isElectionActive() ? "Cannot reset active election" : "Reset all election data"}
           >
             Reset Election
           </button>
           <button
             onClick={handlePauseContract}
-            className={`btn text-white ${electionStats.isPaused ? 'bg-green-600 hover:bg-green-700' : 'bg-orange-600 hover:bg-orange-700'}`}
+            className={`px-4 py-3 text-white rounded-lg transition-colors ${electionStats.isPaused ? 'bg-green-600 hover:bg-green-700' : 'bg-orange-600 hover:bg-orange-700'}`}
             title={electionStats.isPaused ? "Resume contract operations" : "Pause all contract operations"}
           >
             {electionStats.isPaused ? 'Unpause' : 'Pause'} Contract
           </button>
           <button
             onClick={() => router.push("/results")}
-            className="btn bg-blue-600 text-white hover:bg-blue-700"
+            className="px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             title="View current election results"
           >
             View Results
@@ -776,7 +782,7 @@ export default function AdminDashboard() {
           <h3 className="text-xl font-semibold text-indigo-400">Registered Voters</h3>
           <button
             onClick={fetchVoters}
-            className="btn bg-indigo-600 text-white hover:bg-indigo-700"
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
           >
             Refresh List
           </button>
@@ -865,7 +871,7 @@ export default function AdminDashboard() {
               type="text"
               value={newAdminForm.name}
               onChange={(e) => setNewAdminForm({...newAdminForm, name: e.target.value})}
-              className="form-input w-full bg-gray-700 text-white"
+              className="w-full p-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-indigo-500 focus:outline-none"
             />
           </div>
           <div>
@@ -874,7 +880,7 @@ export default function AdminDashboard() {
               type="email"
               value={newAdminForm.email}
               onChange={(e) => setNewAdminForm({...newAdminForm, email: e.target.value})}
-              className="form-input w-full bg-gray-700 text-white"
+              className="w-full p-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-indigo-500 focus:outline-none"
             />
           </div>
           <div>
@@ -883,12 +889,12 @@ export default function AdminDashboard() {
               type="password"
               value={newAdminForm.password}
               onChange={(e) => setNewAdminForm({...newAdminForm, password: e.target.value})}
-              className="form-input w-full bg-gray-700 text-white"
+              className="w-full p-3 bg-gray-700 text-white rounded-lg border border-gray-600 focus:border-indigo-500 focus:outline-none"
             />
           </div>
           <button
             onClick={handleAddAdmin}
-            className="btn bg-indigo-600 text-white hover:bg-indigo-700"
+            className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
           >
             Add Admin
           </button>

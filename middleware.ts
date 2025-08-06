@@ -4,14 +4,12 @@ import { NextRequest, NextResponse } from "next/server";
 // Define protected routes
 const voterProtectedRoutes = [
   "/voter",
-  "/results", 
-  "/candidates",
   "/change-password",
   "/signinusers",
 ];
 
 const adminProtectedRoutes = [
-  "/admin/dashboard",
+  "/admin_page",
 ];
 
 export function middleware(request: NextRequest) {
@@ -36,10 +34,10 @@ export function middleware(request: NextRequest) {
       response = NextResponse.redirect(url);
     }
   }
-  // 3. Block admin_page route - redirect to proper admin route
-  else if (pathname === "/admin_page") {
+  // 3. Block admin/dashboard route - redirect to proper admin_page route
+  else if (pathname === "/admin/dashboard") {
     const url = request.nextUrl.clone();
-    url.pathname = "/admin/dashboard";
+    url.pathname = "/admin_page/dashboard";
     response = NextResponse.redirect(url);
   }
 
@@ -64,8 +62,6 @@ export const config = {
   matcher: [
     "/admin/:path*",
     "/voter",
-    "/results",
-    "/candidates", 
     "/change-password",
     "/signinusers",
     "/admin_page/:path*",

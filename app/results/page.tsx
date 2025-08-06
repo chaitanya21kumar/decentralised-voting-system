@@ -5,7 +5,7 @@ import React, { useEffect, useRef, useState } from "react";
 import Web3 from "web3";
 import { motion } from "framer-motion";
 import SignHeader from "@/components/ui/signHeader";
-import { votingAbi, votingAddress } from "../artifacts/votingArtifact";
+import { votingAbi, votingAddress } from "../artifacts/votingArtifact.js";
 
 interface Candidate {
   candidateId: number;
