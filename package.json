@@ -25,6 +25,7 @@
     "firebase": "^11.8.1",
     "formidable": "^3.5.2",
     "framer-motion": "^12.15.0",
+    "ganache": "^7.9.2",
     "js-cookie": "^3.0.5",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^0.511.0",

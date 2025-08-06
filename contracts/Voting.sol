@@ -57,7 +57,7 @@ contract Voting is ReentrancyGuard {
     mapping(uint256 => Candidate) public candidates;
     mapping(address => bool) public admins;
     mapping(bytes32 => bool) private candidateNameExists;
-    mapping(address => bool) private hasVoted;
+    mapping(address => bool) public hasVoted;
 
     // --- Events ---
     event DIDRegistryUpdated(string cid);
@@ -284,7 +284,7 @@ contract Voting is ReentrancyGuard {
     }
 
     // --- Election Conclusion ---
-    function endElection() public onlyAdmin notPaused onlyWhenVotingEnded {
+    function endElection() public onlyAdmin notPaused {
         votingStart = 0;
         emit ElectionEnded(block.timestamp);
     }
